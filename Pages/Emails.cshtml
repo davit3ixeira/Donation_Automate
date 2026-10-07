@@ -1,0 +1,338 @@
+@page
+@model EmailsModel
+@{
+    ViewData["Title"] = "E-mails";
+    var testMode = !Model.Settings.Smtp.IsConfigured;
+}
+
+<div class="page-head with-actions">
+    <div>
+        <p class="eyebrow">Área da equipe</p>
+        <h1>E-mails</h1>
+        <p class="muted">Lista de possíveis doadores, envio de e-mails e modelos de mensagem.</p>
+    </div>
+    <div class="sync">
+        <span id="sync-stamp" class="muted" aria-live="polite"></span>
+        <a id="sync" class="btn" asp-page="/Emails">Sincronizar</a>
+    </div>
+</div>
+
+@if (testMode)
+{
+    <div class="notice">
+        <strong>Modo de teste:</strong> nenhum e-mail é enviado de verdade. As mensagens são salvas como arquivos <code>.eml</code>
+        em <code>data\outbox</code> (abrem no Outlook ou no Bloco de Notas). Para enviar de verdade, preencha a
+        <a href="#configuracao">configuração de envio</a>.
+    </div>
+}
+
+<section class="cards">
+    <partial name="_SheetCard" model="Model.EmailsCard" />
+
+    <div class="card">
+        <h2>Resumo da campanha</h2>
+        <div id="live-stats" data-live>
+            <dl class="stats">
+                <div><dt>Doadores na lista</dt><dd>@Model.Donors.Count</dd></div>
+                <div><dt>Já pediram crianças</dt><dd>@Model.Donors.Count(d => d.HasDonated)</dd></div>
+                <div><dt>Crianças disponíveis</dt><dd>@Model.Stats.Available <small>de @Model.Stats.Total (@Model.Stats.PercentAvailable)</small></dd></div>
+                <div><dt>Aguardando aprovação</dt><dd>@Model.Stats.Pending</dd></div>
+                <div><dt>Aprovadas</dt><dd>@Model.Stats.Approved</dd></div>
+            </dl>
+            @if (Model.Stats.Total > 0)
+            {
+                <div class="progress" role="img" aria-label="@Model.Stats.PercentChosen das crianças já foram escolhidas">
+                    <span class="bar-approved" style="width:@((Model.Stats.Approved * 100.0 / Model.Stats.Total).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%"></span>
+                    <span class="bar-pending" style="width:@((Model.Stats.Pending * 100.0 / Model.Stats.Total).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%"></span>
+                </div>
+                <p class="hint muted">@Model.Stats.PercentChosen das crianças já foram escolhidas.</p>
+            }
+        </div>
+    </div>
+</section>
+
+@* ---------------------------------------------------------------- Send to everyone *@
+<section class="card" id="enviar">
+    <h2>Enviar para todos</h2>
+    <form method="post" asp-page-handler="SendAll" id="send-all-form">
+        <fieldset class="template-choice">
+            <legend class="muted">Escolha o modelo</legend>
+            @foreach (var key in TemplateKeys.Campaign)
+            {
+                <label class="choice">
+                    <input type="radio" name="template" value="@key" checked="@(key == TemplateKeys.Invite)">
+                    <span>
+                        <strong>@TemplateKeys.Label(key)</strong>
+                        <small class="muted">@TemplateKeys.Description(key)</small>
+                    </span>
+                </label>
+            }
+        </fieldset>
+
+        @foreach (var key in TemplateKeys.Campaign)
+        {
+            var preview = Model.Preview(key);
+            <div class="preview" data-preview="@key" hidden="@(key != TemplateKeys.Invite)">
+                <div class="preview-subject"><span class="muted">Assunto:</span> @preview.Subject</div>
+                <div class="preview-body">@preview.Body</div>
+            </div>
+        }
+        <p class="hint muted">Prévia com o primeiro nome da lista. Cada pessoa recebe o próprio nome. Para mudar o texto, edite os <a href="#modelos">modelos</a>.</p>
+
+        <div class="send-row">
+            <label class="inline-field">
+                Para
+                <select name="audience" id="audience">
+                    <option value="@Audience.All" data-count="@Model.AudienceCount(Audience.All)">Todos (@Model.AudienceCount(Audience.All))</option>
+                    <option value="@Audience.NotDonated" data-count="@Model.AudienceCount(Audience.NotDonated)">Quem ainda não doou (@Model.AudienceCount(Audience.NotDonated))</option>
+                    <option value="@Audience.Donated" data-count="@Model.AudienceCount(Audience.Donated)">Quem já doou (@Model.AudienceCount(Audience.Donated))</option>
+                </select>
+            </label>
+            <button class="btn btn-primary" id="send-all-btn">Enviar</button>
+        </div>
+    </form>
+</section>
+
+@* ---------------------------------------------------------------- Donor list *@
+<div id="live-donors" data-live>
+    <section>
+        <div class="section-head">
+            <h2>Doadores</h2>
+            <span class="muted">@Model.Donors.Count na lista</span>
+        </div>
+        @if (Model.Donors.Count == 0)
+        {
+            <p class="empty">Nenhum doador ainda. Vincule ou envie a planilha de doadores acima. Quem pedir crianças pelo site entra na lista automaticamente.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>E-mail</th>
+                            <th>Situação</th>
+                            <th>Aguardando</th>
+                            <th>Aprovadas</th>
+                            <th>Origem</th>
+                            <th>Último e-mail</th>
+                            <th><span class="visually-hidden">Ações</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in Model.Donors)
+                        {
+                            <tr>
+                                <td>@d.Name</td>
+                                <td>@d.Email</td>
+                                <td><span class="pill pill-@d.SituationClass">@d.Situation</span></td>
+                                <td class="num" title="@string.Join(", ", d.Pending)">@(d.Pending.Count > 0 ? d.Pending.Count : "–")</td>
+                                <td class="num" title="@string.Join(", ", d.Approved)">@(d.Approved.Count > 0 ? d.Approved.Count : "–")</td>
+                                <td class="muted">@(d.Origin == "" ? "Planilha" : d.Origin)</td>
+                                <td class="muted">@d.LastEmail</td>
+                                <td class="row-actions">
+                                    @if (d.CanReceive)
+                                    {
+                                        <button type="button" class="btn-icon write-to" data-name="@d.Name" data-email="@d.Email"
+                                                title="Escrever para @d.Email" aria-label="Escrever para @d.Email">✉</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="hint muted">Passe o mouse sobre os números para ver os nomes das crianças.</p>
+        }
+    </section>
+</div>
+
+<dialog id="write-dialog">
+    <form method="post" asp-page-handler="SendOne">
+        <h2>Escrever para <span id="write-to-name"></span></h2>
+        <p class="muted" id="write-to-email"></p>
+        <input type="hidden" name="name" id="write-name">
+        <input type="hidden" name="email" id="write-email">
+        <div class="field">
+            <label for="write-subject">Assunto</label>
+            <input id="write-subject" name="subject" required>
+        </div>
+        <div class="field">
+            <label for="write-body">Mensagem</label>
+            <textarea id="write-body" name="body" rows="9" required></textarea>
+        </div>
+        <div class="actions">
+            <button type="button" class="btn" id="write-cancel">Cancelar</button>
+            <button class="btn btn-primary">Enviar</button>
+        </div>
+    </form>
+</dialog>
+
+@* ---------------------------------------------------------------- Templates *@
+<section id="modelos">
+    <div class="section-head">
+        <h2>Modelos de e-mail</h2>
+    </div>
+    <p class="hint muted">Os trechos entre chaves, como <code>{nome}</code>, são trocados pelos dados de cada pessoa na hora do envio.</p>
+    <form method="post" asp-page-handler="Templates">
+        <div class="templates">
+            @foreach (var key in TemplateKeys.All)
+            {
+                var template = Model.Settings.Template(key);
+                <div class="card template">
+                    <h3>@TemplateKeys.Label(key)</h3>
+                    <p class="hint muted">@TemplateKeys.Description(key)</p>
+                    <div class="field">
+                        <label for="subject-@key">Assunto</label>
+                        <input id="subject-@key" name="subjects[@key]" value="@template.Subject" required>
+                    </div>
+                    <div class="field">
+                        <label for="body-@key">Mensagem</label>
+                        <textarea id="body-@key" name="bodies[@key]" rows="10" required>@template.Body</textarea>
+                    </div>
+                    <div class="placeholders">
+                        @foreach (var (name, meaning) in TemplateKeys.Placeholders(key))
+                        {
+                            <button type="button" class="chip" data-insert="@name" data-target="body-@key" title="Inserir: @meaning">@name</button>
+                        }
+                    </div>
+                    <button class="btn btn-small link-button" formaction="?handler=ResetTemplate&key=@key" formnovalidate
+                            onclick="return confirm('Voltar o modelo &quot;@TemplateKeys.Label(key)&quot; ao texto padrão? O texto atual será perdido.')">
+                        Restaurar texto padrão
+                    </button>
+                </div>
+            }
+        </div>
+        <div class="form-footer">
+            <button class="btn btn-primary">Salvar modelos</button>
+        </div>
+    </form>
+</section>
+
+@* ---------------------------------------------------------------- SMTP *@
+<section id="configuracao">
+    <div class="section-head">
+        <h2>Configuração de envio</h2>
+        <span class="pill @(testMode ? "pill-pending" : "pill-approved")">@(testMode ? "Modo de teste" : $"Enviando por {Model.Settings.Smtp.Host}")</span>
+    </div>
+    <div class="card">
+        <form method="post" asp-page-handler="Server" class="server-form">
+            <div class="field">
+                <label for="host">Servidor SMTP</label>
+                <input id="host" name="host" value="@Model.Settings.Smtp.Host" placeholder="smtp.gmail.com">
+            </div>
+            <div class="field small">
+                <label for="port">Porta</label>
+                <input id="port" name="port" type="number" value="@Model.Settings.Smtp.Port" min="1" max="65535">
+            </div>
+            <div class="field">
+                <label for="user">Usuário</label>
+                <input id="user" name="user" value="@Model.Settings.Smtp.User" placeholder="suaong@gmail.com" autocomplete="off">
+            </div>
+            <div class="field">
+                <label for="password">Senha</label>
+                <input id="password" name="password" type="password" autocomplete="new-password"
+                       placeholder="@(Model.HasPassword ? "•••••••• (salva; deixe vazio para manter)" : "")">
+                @if (Model.HasPassword)
+                {
+                    <label class="checkbox"><input type="checkbox" name="clearPassword" value="true"> Apagar a senha salva</label>
+                }
+            </div>
+            <div class="field">
+                <label for="fromName">Nome do remetente</label>
+                <input id="fromName" name="fromName" value="@Model.Settings.Smtp.FromName" placeholder="Creche Mundo Infantil">
+            </div>
+            <div class="field">
+                <label for="fromAddress">E-mail do remetente</label>
+                <input id="fromAddress" name="fromAddress" type="email" value="@Model.Settings.Smtp.FromAddress" placeholder="suaong@gmail.com">
+            </div>
+            <div class="field wide">
+                <label for="siteUrl">Endereço do site (usado no <code>{link}</code>)</label>
+                <input id="siteUrl" name="siteUrl" value="@Model.Settings.SiteUrl" placeholder="@Model.Link">
+            </div>
+            <div class="form-footer wide">
+                <button class="btn btn-primary">Salvar configuração</button>
+                @if (!testMode)
+                {
+                    <button class="btn" formaction="?handler=SendTest" formnovalidate>Enviar e-mail de teste para o remetente</button>
+                }
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        (() => {
+            const syncBtn = document.getElementById('sync');
+            const stamp = document.getElementById('sync-stamp');
+            const now = () => new Date().toLocaleTimeString('pt-BR');
+
+            // Send to everyone: show the chosen template's preview and the real recipient count.
+            const sendForm = document.getElementById('send-all-form');
+            const audience = document.getElementById('audience');
+            const sendBtn = document.getElementById('send-all-btn');
+            const chosen = () => sendForm.querySelector('input[name="template"]:checked');
+            const count = () => Number(audience.selectedOptions[0].dataset.count);
+
+            function updateSendAll() {
+                sendForm.querySelectorAll('[data-preview]').forEach(p => p.hidden = p.dataset.preview !== chosen().value);
+                const n = count();
+                sendBtn.textContent = n === 1 ? 'Enviar para 1 pessoa' : `Enviar para ${n} pessoas`;
+                sendBtn.disabled = n === 0;
+            }
+            sendForm.addEventListener('change', updateSendAll);
+            sendForm.addEventListener('submit', e => {
+                const label = chosen().closest('label').querySelector('strong').textContent;
+                if (!confirm(`Enviar o e-mail "${label}" para ${count()} pessoa(s)?`)) e.preventDefault();
+                else { sendBtn.disabled = true; sendBtn.textContent = 'Enviando…'; }
+            });
+            updateSendAll();
+
+            // Write to one person: free text, nothing pre-filled.
+            const dialog = document.getElementById('write-dialog');
+            document.addEventListener('click', e => {
+                const btn = e.target.closest('.write-to');
+                if (!btn) return;
+                document.getElementById('write-to-name').textContent = btn.dataset.name || btn.dataset.email;
+                document.getElementById('write-to-email').textContent = btn.dataset.email;
+                document.getElementById('write-name').value = btn.dataset.name;
+                document.getElementById('write-email').value = btn.dataset.email;
+                document.getElementById('write-subject').value = '';
+                document.getElementById('write-body').value = '';
+                dialog.showModal();
+                document.getElementById('write-subject').focus();
+            });
+            document.getElementById('write-cancel').addEventListener('click', () => dialog.close());
+
+            // Placeholder chips insert at the cursor in their template's message.
+            document.addEventListener('click', e => {
+                const chip = e.target.closest('.chip[data-insert]');
+                if (!chip) return;
+                const area = document.getElementById(chip.dataset.target);
+                const start = area.selectionStart ?? area.value.length;
+                area.setRangeText(chip.dataset.insert, start, area.selectionEnd ?? start, 'end');
+                area.focus();
+            });
+
+            syncBtn.addEventListener('click', async e => {
+                e.preventDefault();
+                syncBtn.classList.add('busy');
+                try {
+                    await Live.refresh();
+                    stamp.textContent = `Sincronizado às ${now()}`;
+                } catch {
+                    stamp.textContent = 'Não foi possível sincronizar. Tente novamente.';
+                } finally {
+                    syncBtn.classList.remove('busy');
+                }
+            });
+
+            Live.start({
+                canSwap: () => !dialog.open,
+                afterSwap: () => { stamp.textContent = `Atualizado automaticamente às ${now()}`; },
+            });
+        })();
+    </script>
+}

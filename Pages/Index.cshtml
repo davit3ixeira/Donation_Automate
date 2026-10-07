@@ -1,0 +1,491 @@
+@page
+@model IndexModel
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = "Adote um sorriso";
+    var stats = Model.Stats;
+    var percent = stats.Total == 0 ? 0 : (int)Math.Round(stats.Chosen * 100.0 / stats.Total);
+    var year = DateTime.Now.Year;
+}
+@functions {
+    private static readonly Dictionary<string, string> IconPaths = new()
+    {
+        ["gift"] = "<rect x='3' y='8' width='18' height='4' rx='1'/><path d='M12 8v13'/><path d='M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7'/><path d='M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5'/>",
+        ["search"] = "<circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/>",
+        ["check"] = "<path d='M20 6 9 17l-5-5'/>",
+        ["heart"] = "<path d='M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7Z'/>",
+        ["mail"] = "<rect x='2' y='4' width='20' height='16' rx='2'/><path d='m22 7-10 6L2 7'/>",
+        ["list"] = "<rect x='5' y='3' width='14' height='18' rx='2'/><path d='M9 8h6M9 12h6M9 16h4'/>",
+        ["calendar"] = "<rect x='3' y='5' width='18' height='16' rx='2'/><path d='M3 10h18M8 3v4M16 3v4M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01'/>",
+        ["star"] = "<path d='M12 2.5l2.9 6.1 6.6.7-4.9 4.5 1.4 6.6L12 17.1l-6 3.3 1.4-6.6-4.9-4.5 6.6-.7z'/>",
+        ["shoe"] = "<path d='M4 16V7h5l1 3 6 2c2.5.8 4 1.8 4 4v1H4z'/><path d='M4 20h16'/>",
+        ["shirt"] = "<path d='M20.4 6.6 16 4a4 4 0 0 1-8 0L3.6 6.6a1 1 0 0 0-.5 1.2l1 3a1 1 0 0 0 1.2.6L7 11v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-9l1.7.4a1 1 0 0 0 1.2-.6l1-3a1 1 0 0 0-.5-1.2z'/>",
+        ["plus"] = "<path d='M12 5v14M5 12h14'/>",
+        ["santa"] = "<path d='M4 17c.5-6.5 4-11 9-11 3.2 0 5.6 2.2 6.4 5.4'/><circle cx='19.6' cy='13.6' r='2'/><rect x='3' y='17' width='17' height='4' rx='2'/>",
+        ["arrow"] = "<path d='M5 12h14M13 6l6 6-6 6'/>",
+    };
+
+    /// <summary>A small line icon (decorative; the text next to it carries the meaning).</summary>
+    private static IHtmlContent Icon(string name, int size = 20) => new HtmlString(
+        $"<svg width='{size}' height='{size}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' " +
+        $"stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>{IconPaths[name]}</svg>");
+}
+
+@section Hero {
+    <section class="hero">
+        <div class="hero-bokeh" aria-hidden="true"></div>
+        <div class="hero-snow" aria-hidden="true"></div>
+        <div class="hero-inner">
+            <figure class="hero-photo">
+                <img src="~/img/hero-crianca.jpg" alt="Criança sorridente abraçando um presente de Natal" width="422" height="612">
+                <figcaption class="note note-photo" aria-hidden="true">Pequenos gestos<br>criam grandes<br>sorrisos! ♡</figcaption>
+            </figure>
+
+            <div class="hero-text">
+                <h1 class="hero-title">
+                    <span class="title-line">Natal</span>
+                    <span class="title-line">Solidário</span>
+                    <span class="title-year">@year</span>
+                </h1>
+                <p class="tagline">Adote um sorriso neste Natal!</p>
+                <p class="lead">
+                    Neste Natal, vamos nos unir para levar alegria, carinho e esperança às crianças da
+                    <strong>Creche Comunitária Mundo Infantil</strong>, na comunidade Santa Marta, no Rio de Janeiro.
+                </p>
+                <div class="hero-actions">
+                    <a href="#criancas" class="btn btn-primary btn-lg">@Icon("gift") Escolher uma criança</a>
+                    <a href="#como-funciona" class="btn btn-light btn-lg">Como funciona</a>
+                </div>
+
+                @* Refreshed in place by live.js, so the numbers follow the spreadsheet. *@
+                <div class="hero-card" id="live-progress" data-live>
+                    <div class="hero-card-row">
+                        <span class="big-number">@stats.Chosen</span>
+                        <span>
+                            @if (stats.Total > 0 && stats.Available == 0)
+                            {
+                                <text>de @stats.Total crianças já têm padrinho. Todas foram escolhidas! 🎉</text>
+                            }
+                            else
+                            {
+                                <text>de @stats.Total crianças já têm padrinho ou madrinha. Faltam <strong>@stats.Available</strong>.</text>
+                            }
+                        </span>
+                    </div>
+                    <div class="garland" role="progressbar" aria-valuemin="0" aria-valuemax="@stats.Total" aria-valuenow="@stats.Chosen"
+                         aria-label="@stats.Chosen de @stats.Total crianças já têm padrinho">
+                        <div class="garland-fill" style="--fill: @(percent)%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+}
+
+@if (Model.ThanksName is not null)
+{
+    <section class="thanks" id="obrigado" tabindex="-1">
+        <div class="thanks-icon">@Icon("gift", 32)</div>
+        <h2>Obrigado, @Model.ThanksName! 🎄</h2>
+        <p>
+            Seu pedido para @(Model.ThanksCount == 1 ? "1 criança" : $"{Model.ThanksCount} crianças") foi recebido
+            e está aguardando a confirmação da equipe.
+        </p>
+        <p>Assim que for confirmado, você recebe por e-mail as orientações para montar e entregar o Kit.</p>
+        <a href="#criancas" class="btn">@Icon("plus", 18) Escolher mais uma criança</a>
+    </section>
+}
+
+@* ---------------------------------------------------------------- How it works *@
+<section class="steps" id="como-funciona" aria-label="Como funciona">
+    <div class="step step-red">
+        <span class="step-circle">@Icon("list", 40)</span>
+        <h3>1. Escolha</h3>
+        <p>uma ou mais crianças e adicione à sacola do Papai Noel.</p>
+    </div>
+    <div class="step step-green">
+        <span class="step-circle">@Icon("mail", 40)</span>
+        <h3>2. Confirme</h3>
+        <p>seu nome e e-mail aqui mesmo no site.</p>
+    </div>
+    <div class="step step-gold">
+        <span class="step-circle">@Icon("gift", 40)</span>
+        <h3>3. Receba</h3>
+        <p>por e-mail as orientações para montagem e entrega do Kit.</p>
+    </div>
+    <div class="step step-red">
+        <span class="step-circle">@Icon("heart", 40)</span>
+        <h3>4. Faça parte</h3>
+        <p>de um Natal inesquecível!</p>
+    </div>
+</section>
+
+@* ---------------------------------------------------------------- Kit + calendar *@
+<section class="info-row">
+    <div class="kit">
+        <h2 class="brush-banner">Kit Natal <span aria-hidden="true">♡</span></h2>
+        <p class="kit-intro">Cada criança receberá:</p>
+        <ul class="kit-items">
+            <li>
+                <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
+                    <path d="M54 14 43 9a11 11 0 0 1-22 0L10 14a3 3 0 0 0-1.6 3.4l2.6 8a3 3 0 0 0 3.4 2L18 27v27a3 3 0 0 0 3 3h22a3 3 0 0 0 3-3V27l3.6.4a3 3 0 0 0 3.4-2l2.6-8A3 3 0 0 0 54 14z" fill="#2f8a5c"/>
+                    <path d="M21 9a11 11 0 0 0 22 0" fill="none" stroke="#d23a2f" stroke-width="4"/>
+                </svg>
+                <span>Roupa</span>
+            </li>
+            <li>
+                <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
+                    <path d="M6 44V22h16l4 8 18 5c8 2.2 14 5.6 14 11v4H6z" fill="#d23a2f"/>
+                    <path d="M6 50h52v4a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z" fill="#f4ecdd"/>
+                    <path d="M24 31l5-4M29 33l5-4M34 35l5-4" stroke="#f4ecdd" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+                <span>Calçado</span>
+            </li>
+            <li>
+                <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
+                    <circle cx="18" cy="14" r="7" fill="#c88a3a"/><circle cx="46" cy="14" r="7" fill="#c88a3a"/>
+                    <circle cx="18" cy="14" r="3.5" fill="#e9b97a"/><circle cx="46" cy="14" r="3.5" fill="#e9b97a"/>
+                    <ellipse cx="32" cy="46" rx="17" ry="15" fill="#c88a3a"/>
+                    <circle cx="32" cy="24" r="14" fill="#d79a48"/>
+                    <ellipse cx="32" cy="29" rx="6" ry="4.5" fill="#f1cf98"/>
+                    <circle cx="27" cy="21" r="1.8" fill="#2b261f"/><circle cx="37" cy="21" r="1.8" fill="#2b261f"/>
+                    <circle cx="32" cy="27.5" r="1.8" fill="#2b261f"/>
+                    <path d="M25 37l7 3 7-3-2 6-5-2-5 2z" fill="#d23a2f"/>
+                </svg>
+                <span>Brinquedo</span>
+            </li>
+        </ul>
+    </div>
+
+    <div class="calendar">
+        <h2>@Icon("calendar", 26) Calendário @year</h2>
+        <p><strong>Entrega dos Kits:</strong> até início de dezembro/@year</p>
+        <p><strong>Festa de Natal na Creche:</strong> dezembro/@year</p>
+        <p class="calendar-note">Todos os participantes serão convidados para a celebração.</p>
+    </div>
+</section>
+
+@* ---------------------------------------------------------------- Children *@
+<div class="list-head" id="criancas">
+    <div>
+        <p class="note">Escolha quem vai receber o seu carinho ♡</p>
+        <h2 class="section-title">Crianças esperando um padrinho</h2>
+        <p class="muted">Toque em um cartão para adicionar a criança à sacola do Papai Noel. Depois, é só continuar.</p>
+    </div>
+</div>
+
+@if (Model.Children.Count > 0)
+{
+    <div class="filter-bar" role="search">
+        <label class="search">
+            <span class="visually-hidden">Buscar pelo nome</span>
+            @Icon("search", 18)
+            <input type="search" id="search" placeholder="Buscar pelo nome…" autocomplete="off">
+        </label>
+        @if (Model.Turmas.Count > 1)
+        {
+            <div class="turma-chips" role="group" aria-label="Filtrar por turma">
+                <button type="button" class="turma-chip" data-turma="" aria-pressed="true">Todas</button>
+                @foreach (var (turma, count) in Model.Turmas)
+                {
+                    <button type="button" class="turma-chip" data-turma="@turma" aria-pressed="false">@turma <span class="count">@count</span></button>
+                }
+            </div>
+        }
+        <span class="result-count" id="result-count" aria-live="polite"></span>
+    </div>
+}
+
+<form method="post" id="send-form">
+    <span asp-validation-for="Selected" class="field-error"></span>
+
+    @* Refreshed in place by live.js whenever the spreadsheet changes. *@
+    <div id="live-list" data-live>
+        @if (!Model.HasSpreadsheet)
+        {
+            <p class="empty">A lista de crianças ainda não foi publicada. Volte em breve! 🎄</p>
+        }
+        else if (Model.Children.Count == 0)
+        {
+            <div class="empty">
+                <strong>Todas as crianças já têm padrinho ou madrinha!</strong><br>
+                Muito obrigado a todos que participaram. 🎉
+            </div>
+        }
+        else
+        {
+            <div class="child-grid">
+                @for (var i = 0; i < Model.Children.Count; i++)
+                {
+                    var c = Model.Children[i];
+                    var meta = string.Join(" · ", new[] { c.Age != "" ? c.Age : c.AgeGroup, c.Turma }.Where(s => s != ""));
+                    <label class="child-card" style="--i: @(i % 24)"
+                           data-turma="@c.Turma" data-search="@c.Search" data-first="@c.FirstName" data-name="@c.Name"
+                           data-initials="@c.Initials" data-color="@c.Color">
+                        <input type="checkbox" name="Selected" value="@c.Id" class="visually-hidden"
+                               checked="@Model.Selected.Contains(c.Id)" aria-label="Escolher @c.Name">
+                        <span class="ribbon" aria-hidden="true">@Icon("check", 18)</span>
+                        <span class="child-number">Nº @c.Id</span>
+                        <span class="child-top">
+                            <span class="avatar" style="--avatar: @c.Color" aria-hidden="true">@c.Initials</span>
+                            <span>
+                                <span class="child-name">@c.Name</span>
+                                <span class="child-meta">@meta</span>
+                            </span>
+                        </span>
+                        @if (c.Shoes != "" || c.Clothes != "")
+                        {
+                            <span class="sizes">
+                                @if (c.Shoes != "")
+                                {
+                                    <span class="size">@Icon("shoe", 16) Calçado <b>@c.Shoes</b></span>
+                                }
+                                @if (c.Clothes != "")
+                                {
+                                    <span class="size">@Icon("shirt", 16) Roupa <b>@c.Clothes</b></span>
+                                }
+                            </span>
+                        }
+                        <span class="pick" aria-hidden="true">
+                            <span class="when-unchecked">@Icon("santa", 18) Adicionar à sacola</span>
+                            <span class="when-checked">@Icon("check", 16) Na sacola do Papai Noel</span>
+                        </span>
+                    </label>
+                }
+            </div>
+            <div class="no-results" id="no-results" hidden>
+                <p>Nenhuma criança encontrada com esse filtro.</p>
+                <button type="button" class="btn" data-clear-filters>Limpar filtros</button>
+            </div>
+        }
+    </div>
+
+    <div class="bag" id="bag" aria-hidden="true" inert>
+        <div class="bag-inner">
+            <span class="bag-icon" id="bag-icon">@Icon("gift", 24)<span class="bag-count" id="bag-count">0</span></span>
+            <div class="bag-text" aria-live="polite">
+                <strong id="bag-title">A sacola do Papai Noel está vazia</strong>
+                <span id="bag-names"></span>
+            </div>
+            <button type="button" class="btn btn-ghost" id="bag-clear">Esvaziar</button>
+            <button type="button" class="btn btn-primary" id="open-send">Continuar @Icon("arrow", 18)</button>
+        </div>
+    </div>
+
+    <dialog id="send-dialog" aria-labelledby="send-title" data-open="@(Model.ReopenDialog ? "true" : null)">
+        <div class="dialog-head">
+            <span class="dialog-icon">@Icon("gift", 24)</span>
+            <div>
+                <h2 id="send-title">Quase lá!</h2>
+                <p class="muted">Confira as crianças e deixe seu contato.</p>
+            </div>
+        </div>
+
+        <ul class="dialog-children" id="dialog-children" aria-label="Crianças na sacola do Papai Noel"></ul>
+
+        <div class="field">
+            <label asp-for="Name"></label>
+            <input asp-for="Name" required autocomplete="name" placeholder="Como podemos te chamar?">
+            <span asp-validation-for="Name" class="field-error"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Email"></label>
+            <input asp-for="Email" required autocomplete="email" placeholder="voce@exemplo.com">
+            <span asp-validation-for="Email" class="field-error"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Phone">Telefone / WhatsApp <small>(opcional)</small></label>
+            <input asp-for="Phone" autocomplete="tel" placeholder="(21) 99999-9999">
+            <span asp-validation-for="Phone" class="field-error"></span>
+        </div>
+
+        <div class="actions">
+            <button type="button" class="btn btn-ghost" id="cancel-send">Voltar</button>
+            <button type="submit" class="btn btn-primary" id="confirm-send">@Icon("gift", 18) Confirmar apadrinhamento</button>
+        </div>
+        <p class="privacy">Usamos seu contato só para falar sobre esta campanha de Natal.</p>
+    </dialog>
+</form>
+
+@* ---------------------------------------------------------------- More than a gift *@
+<section class="info-row closing">
+    <div class="more">
+        <span class="more-star" aria-hidden="true">@Icon("star", 34)</span>
+        <h2 class="section-title red">Mais que um presente</h2>
+        <p>
+            Seu gesto ajuda a construir lembranças, fortalecer sonhos e levar o verdadeiro espírito do Natal
+            para dezenas de crianças atendidas pela <strong>Creche Comunitária Mundo Infantil</strong>.
+        </p>
+    </div>
+    <div class="quote">
+        <p class="note quote-text">“Porque toda criança merece viver a magia do Natal.”</p>
+        <svg class="skyline" viewBox="0 0 300 150" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+            @* The hill climbs along a straight slope; each little house stands on it. *@
+            <path d="M4 146 240 40c8-4 15-8 22-10"/>
+            <path d="M262 2v28M254 10h16"/>
+            <path d="M40 130v-14l8-6 8 6v14M62 120v-18l8-6 8 6v18M84 110v-16l8-6 8 6v16M106 100v-20l8-6 8 6v20M128 90v-16l8-6 8 6v16M150 80v-18l8-6 8 6v18M172 70v-14l8-6 8 6v14M194 61v-16l8-6 8 6v16M216 51v-12l8-6 8 6v12"/>
+            <path d="M46 123h4M68 111h4M90 102h4M112 90h4M134 82h4M156 71h4M178 63h4M200 53h4"/>
+        </svg>
+        <p class="note skyline-label">Santa Marta<br>Rio de Janeiro</p>
+    </div>
+</section>
+
+<div class="page-bottom-space"></div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const form = document.getElementById('send-form');
+            const dialog = document.getElementById('send-dialog');
+            const bag = document.getElementById('bag');
+            const search = document.getElementById('search');
+            const fold = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+            let turma = '';
+
+            // Cards live inside #live-list, which is replaced on refresh: always look them up fresh.
+            const boxes = () => [...form.querySelectorAll('input[name="Selected"]')];
+            const cardOf = box => box.closest('.child-card');
+            const chosen = () => boxes().filter(b => b.checked);
+
+            function updateBag(bump) {
+                const cards = chosen().map(cardOf);
+                const n = cards.length;
+                bag.classList.toggle('open', n > 0);
+                bag.inert = n === 0;
+                bag.setAttribute('aria-hidden', String(n === 0));
+                document.getElementById('bag-count').textContent = n;
+                document.getElementById('bag-title').textContent =
+                    n === 0 ? 'A sacola do Papai Noel está vazia' : n === 1 ? '1 criança na sacola do Papai Noel' : `${n} crianças na sacola do Papai Noel`;
+                const names = cards.map(c => c.dataset.first);
+                document.getElementById('bag-names').textContent = names.length > 3
+                    ? `${names.slice(0, 3).join(', ')} e mais ${names.length - 3}`
+                    : names.join(', ');
+                if (bump) Festive.replay(document.getElementById('bag-icon'), 'bump');
+            }
+
+            function applyFilters() {
+                const q = fold(search?.value ?? '');
+                const all = boxes();
+                let visible = 0;
+                for (const box of all) {
+                    const card = cardOf(box);
+                    const show = (!turma || card.dataset.turma === turma) && (!q || card.dataset.search.includes(q));
+                    card.hidden = !show;
+                    if (show) visible++;
+                }
+                const none = document.getElementById('no-results');
+                if (none) none.hidden = visible > 0 || all.length === 0;
+                const count = document.getElementById('result-count');
+                if (count) count.textContent = all.length === 0 ? ''
+                    : visible === all.length ? `${all.length} crianças` : `${visible} de ${all.length} crianças`;
+            }
+
+            function setTurma(value) {
+                turma = value;
+                document.querySelectorAll('.turma-chip').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.turma === value)));
+                applyFilters();
+            }
+
+            form.addEventListener('change', e => {
+                if (e.target.name !== 'Selected') return;
+                if (e.target.checked) Festive.replay(cardOf(e.target), 'pop');
+                updateBag(true);
+            });
+
+            search?.addEventListener('input', applyFilters);
+            document.querySelectorAll('.turma-chip').forEach(chip => chip.addEventListener('click', () => setTurma(chip.dataset.turma)));
+            document.addEventListener('click', e => {
+                if (!e.target.closest('[data-clear-filters]')) return;
+                if (search) search.value = '';
+                setTurma('');
+            });
+
+            document.getElementById('bag-clear').addEventListener('click', () => {
+                chosen().forEach(b => b.checked = false);
+                updateBag();
+            });
+
+            // The dialog lists who is in the bag, each with a button to take them out.
+            function fillDialog() {
+                const list = document.getElementById('dialog-children');
+                list.replaceChildren(...chosen().map(box => {
+                    const card = cardOf(box);
+                    const li = document.createElement('li');
+                    const avatar = document.createElement('span');
+                    avatar.className = 'avatar';
+                    avatar.style.setProperty('--avatar', card.dataset.color);
+                    avatar.textContent = card.dataset.initials;
+                    const info = document.createElement('span');
+                    info.className = 'info';
+                    info.textContent = card.dataset.name;
+                    const meta = document.createElement('small');
+                    meta.textContent = card.querySelector('.child-meta').textContent;
+                    info.append(meta);
+                    const remove = document.createElement('button');
+                    remove.type = 'button';
+                    remove.className = 'btn-icon';
+                    remove.textContent = '✕';
+                    remove.title = `Tirar ${card.dataset.first} da sacola do Papai Noel`;
+                    remove.setAttribute('aria-label', remove.title);
+                    remove.addEventListener('click', () => {
+                        box.checked = false;
+                        li.remove();
+                        updateBag();
+                        if (!list.children.length) dialog.close();
+                    });
+                    li.append(avatar, info, remove);
+                    return li;
+                }));
+            }
+
+            function openDialog() {
+                fillDialog();
+                dialog.showModal();
+                const name = dialog.querySelector('input[name="Name"]');
+                (name.value ? dialog.querySelector('#confirm-send') : name).focus();
+            }
+
+            document.getElementById('open-send').addEventListener('click', openDialog);
+            document.getElementById('cancel-send').addEventListener('click', () => dialog.close());
+
+            form.addEventListener('submit', e => {
+                if (chosen().length === 0) { e.preventDefault(); dialog.close(); return; }
+                const btn = document.getElementById('confirm-send');
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner" aria-hidden="true"></span> Enviando…';
+            });
+
+            // Keep the bag across refreshes. Children someone else just chose disappear from the
+            // list, and from the bag with them.
+            let ticked = [];
+            Live.start({
+                canSwap: () => !dialog.open,
+                beforeSwap: () => { ticked = chosen().map(b => b.value); },
+                afterSwap: () => {
+                    document.querySelector('.child-grid')?.classList.add('settled');
+                    boxes().forEach(b => b.checked = ticked.includes(b.value));
+                    applyFilters();
+                    updateBag();
+                },
+            });
+
+            // Let the string of lights fill up on arrival.
+            const fill = document.querySelector('.garland-fill');
+            if (fill && !Festive.reducedMotion()) {
+                const target = fill.style.getPropertyValue('--fill');
+                fill.style.setProperty('--fill', '0%');
+                requestAnimationFrame(() => requestAnimationFrame(() => fill.style.setProperty('--fill', target)));
+            }
+
+            applyFilters();
+            updateBag();
+
+            const thanks = document.getElementById('obrigado');
+            if (thanks) {
+                thanks.focus({ preventScroll: true });
+                Festive.confetti();
+            }
+            if (dialog.dataset.open) openDialog();
+        })();
+    </script>
+}

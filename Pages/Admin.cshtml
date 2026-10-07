@@ -1,0 +1,339 @@
+@page
+@model AdminModel
+@{
+    ViewData["Title"] = "Administração";
+}
+
+@Html.AntiForgeryToken()
+
+<div class="page-head with-actions">
+    <div>
+        <p class="eyebrow">Área da equipe</p>
+        <h1>Administração</h1>
+        <p class="muted">Edite as crianças direto na tabela abaixo. Cada alteração é gravada na planilha na hora, e alterações na planilha aparecem aqui automaticamente.</p>
+    </div>
+    <div class="sync">
+        <span id="sync-stamp" class="muted" aria-live="polite"></span>
+        <a id="sync" class="btn" asp-route-filter="@Model.Filter">Sincronizar</a>
+    </div>
+</div>
+
+<section class="cards">
+    <partial name="_SheetCard" model="Model.ChildrenCard" />
+</section>
+
+@* Refreshed in place by live.js whenever the spreadsheet changes, or on Sincronizar. *@
+<div id="live-children" data-live>
+    @if (!Model.Children.IsEmpty)
+    {
+        var kitColumn = Model.Children.KitColumn;
+        <section>
+            <div class="section-head">
+                <h2>
+                    Crianças
+                    @if (Model.Counts[ChildStatus.Approved] > 0)
+                    {
+                        <span class="kit-summary">🎁 @Model.KitsDelivered de @Model.Counts[ChildStatus.Approved] kits entregues</span>
+                    }
+                </h2>
+                <div class="section-actions">
+                    <nav class="filters" aria-label="Filtrar por status">
+                        <a asp-route-filter="" class="@(string.IsNullOrEmpty(Model.Filter) ? "active" : null)">
+                            Todas <span class="count">@Model.Children.Rows.Count</span>
+                        </a>
+                        @foreach (var s in ChildStatus.All)
+                        {
+                            <a asp-route-filter="@ChildStatus.CssClass(s)" class="@(Model.Filter == ChildStatus.CssClass(s) ? "active" : null)">
+                                @ChildStatus.Label(s) <span class="count">@Model.Counts[s]</span>
+                            </a>
+                        }
+                    </nav>
+                    <form method="post" asp-page-handler="AddRow">
+                        <button class="btn btn-primary">+ Adicionar criança</button>
+                    </form>
+                </div>
+            </div>
+            <p class="hint muted">Clique em uma célula para editar. <kbd>Enter</kbd> salva, <kbd>Esc</kbd> cancela.</p>
+
+            @if (Model.FilteredRows.Count == 0)
+            {
+                <p class="empty">Nenhuma criança com este status.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="data grid" id="children-grid">
+                        <thead>
+                            <tr>
+                                <th>Kit entregue</th>
+                                @for (var i = 0; i < Model.Children.Headers.Count; i++)
+                                {
+                                    if (i == kitColumn) continue;
+                                    <th>@Model.Children.Headers[i]</th>
+                                }
+                                <th><span class="visually-hidden">Ações</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Model.FilteredRows)
+                            {
+                                var current = AdminModel.StatusOf(row);
+                                var editable = row.Key != "";
+                                <tr id="@(editable ? $"row-{row.Key}" : null)" data-id="@row.Key">
+                                    <td class="kit-cell">
+                                        @if (editable && current == ChildStatus.Approved)
+                                        {
+                                            <label class="kit-toggle">
+                                                <input type="checkbox" class="kit-check" data-id="@row.Key"
+                                                       checked="@Model.Children.KitDelivered(row)" aria-label="Kit da criança nº @row.Key entregue">
+                                                <span class="kit-switch" aria-hidden="true"></span>
+                                                <span class="kit-label">Entregue</span>
+                                            </label>
+                                        }
+                                        else
+                                        {
+                                            <span class="muted" title="Só para pedidos aprovados">–</span>
+                                        }
+                                    </td>
+                                    @for (var i = 0; i < Model.Children.Headers.Count; i++)
+                                    {
+                                        if (i == kitColumn) continue;  // shown as a checkbox below
+                                        if (i != ChildColumns.Status || !editable)
+                                        {
+                                            if (editable)
+                                            {
+                                                <td class="cell" contenteditable="plaintext-only" spellcheck="false" data-col="@i">@row.Values[i]</td>
+                                            }
+                                            else
+                                            {
+                                                <td>@row.Values[i]</td>
+                                            }
+                                            continue;
+                                        }
+                                        <td>
+                                            <div class="status-cell">
+                                                <form method="post" asp-page-handler="Status" asp-route-filter="@Model.Filter">
+                                                    <input type="hidden" name="id" value="@row.Key">
+                                                    <select name="status" class="status status-@ChildStatus.CssClass(current)" aria-label="Status">
+                                                        @if (!ChildStatus.All.Contains(current))
+                                                        {
+                                                            <option selected disabled>@current</option>
+                                                        }
+                                                        @foreach (var s in ChildStatus.All)
+                                                        {
+                                                            <option value="@ChildStatus.CssClass(s)" selected="@(s == current)">@ChildStatus.Label(s)</option>
+                                                        }
+                                                    </select>
+                                                    <noscript><button class="btn btn-small">Salvar</button></noscript>
+                                                </form>
+                                                @if (current == ChildStatus.Pending)
+                                                {
+                                                    <form method="post" asp-page-handler="Status" asp-route-filter="@Model.Filter" class="approve-form">
+                                                        <input type="hidden" name="id" value="@row.Key">
+                                                        <input type="hidden" name="status" value="@ChildStatus.CssClass(ChildStatus.Approved)">
+                                                        <button class="btn btn-small btn-approve">Aprovar</button>
+                                                    </form>
+                                                }
+                                            </div>
+                                        </td>
+                                    }
+                                    <td class="row-actions">
+                                        @if (editable)
+                                        {
+                                            <form method="post" asp-page-handler="DeleteRow" asp-route-filter="@Model.Filter" class="delete-form">
+                                                <input type="hidden" name="id" value="@row.Key">
+                                                <button class="btn-icon" title="Excluir criança" aria-label="Excluir criança nº @row.Key">✕</button>
+                                            </form>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const ID_COL = @ChildColumns.Id;
+            const NAME_COL = @ChildColumns.Nome;
+            const STATUS_COL = @ChildColumns.Status;
+            const main = document.querySelector('main');
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+            const syncBtn = document.getElementById('sync');
+            const stamp = document.getElementById('sync-stamp');
+            const toastEl = document.getElementById('toast');
+            const now = () => new Date().toLocaleTimeString('pt-BR');
+            let saving = 0;
+            let toastTimer;
+
+            function toast(message, kind = 'ok') {
+                toastEl.textContent = message;
+                toastEl.className = `toast toast-${kind}`;
+                toastEl.hidden = false;
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => toastEl.hidden = true, kind === 'error' ? 6000 : 2500);
+            }
+
+            // Saves one cell. The server answers with the value as stored and the spreadsheet's
+            // new version, which we record so live.js doesn't reload the table for our own edit.
+            async function saveCell(id, column, value) {
+                saving++;
+                try {
+                    const res = await fetch('?handler=Cell', {
+                        method: 'POST',
+                        headers: { 'RequestVerificationToken': token },
+                        body: new URLSearchParams({ id, column, value }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok || data.error) throw new Error(data.error || 'Não foi possível salvar. Tente novamente.');
+                    main.dataset.sheetVersion = data.version;
+                    return data;
+                } finally {
+                    saving--;
+                }
+            }
+
+            const cellOf = target => target.closest?.('#children-grid td.cell');
+
+            // Editable cells: remember the value on focus, save on blur if it changed.
+            document.addEventListener('focusin', e => {
+                const td = cellOf(e.target);
+                if (td) td.dataset.original = td.textContent;
+            });
+
+            document.addEventListener('keydown', e => {
+                const td = cellOf(e.target);
+                if (!td) return;
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); td.blur(); }
+                if (e.key === 'Escape') { td.textContent = td.dataset.original ?? ''; td.blur(); }
+            });
+
+            document.addEventListener('focusout', async e => {
+                const td = cellOf(e.target);
+                if (!td) return;
+                const value = td.textContent.trim();
+                const original = (td.dataset.original ?? '').trim();
+                if (value === original) { td.textContent = td.dataset.original ?? ''; return; }
+
+                const tr = td.closest('tr');
+                td.classList.remove('error', 'saved');
+                td.classList.add('saving');
+                td.removeAttribute('title');
+                try {
+                    const data = await saveCell(tr.dataset.id, td.dataset.col, value);
+                    td.textContent = data.value;
+                    if (Number(td.dataset.col) === ID_COL) {
+                        tr.dataset.id = data.value;
+                        tr.id = `row-${data.value}`;
+                        tr.querySelectorAll('input[name="id"]').forEach(i => i.value = data.value);
+                    }
+                    td.classList.add('saved');
+                } catch (err) {
+                    td.textContent = td.dataset.original ?? '';
+                    td.classList.add('error');
+                    td.title = err.message;
+                    toast(err.message, 'error');
+                } finally {
+                    td.classList.remove('saving');
+                }
+            });
+
+            async function changeStatus(tr, status) {
+                try {
+                    const data = await saveCell(tr.dataset.id, STATUS_COL, status);
+                    if (data.warning) toast(`${data.message} ${data.warning}`, 'error');
+                    else toast(data.message);
+                    await Live.refresh();  // counts, filters and the sponsor columns may have changed
+                } catch (err) {
+                    toast(err.message, 'error');
+                    await Live.refresh();
+                }
+            }
+
+            document.addEventListener('change', e => {
+                const select = e.target.closest?.('#children-grid select[name="status"]');
+                if (select) changeStatus(select.closest('tr'), select.value);
+            });
+
+            // "Kit entregue": saved as soon as it's ticked; put back if the save fails.
+            document.addEventListener('change', async e => {
+                const box = e.target.closest?.('#children-grid .kit-check');
+                if (!box) return;
+                saving++;
+                box.disabled = true;
+                try {
+                    const res = await fetch('?handler=Kit', {
+                        method: 'POST',
+                        headers: { 'RequestVerificationToken': token },
+                        body: new URLSearchParams({ id: box.dataset.id, delivered: box.checked }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok || data.error) throw new Error(data.error || 'Não foi possível salvar. Tente novamente.');
+                    main.dataset.sheetVersion = data.version;
+                    toast(data.message);
+                    if (box.checked) Festive.replay(box.closest('.kit-toggle'), 'pop');
+                    await Live.refresh();  // updates the "kits entregues" count
+                } catch (err) {
+                    box.checked = !box.checked;
+                    toast(err.message, 'error');
+                } finally {
+                    saving--;
+                    box.disabled = false;
+                    box.blur();
+                }
+            });
+
+            document.addEventListener('submit', e => {
+                const form = e.target;
+                if (form.matches('#children-grid .approve-form')) {
+                    e.preventDefault();
+                    changeStatus(form.closest('tr'), 'approved');
+                } else if (form.matches('#children-grid .delete-form')) {
+                    const name = form.closest('tr').querySelector(`td[data-col="${NAME_COL}"]`)?.textContent.trim();
+                    const id = form.closest('tr').dataset.id;
+                    if (!confirm(`Excluir a criança nº ${id}${name ? ` (${name})` : ''}? A linha será apagada da planilha.`))
+                        e.preventDefault();
+                }
+            });
+
+            syncBtn.addEventListener('click', async e => {
+                e.preventDefault();
+                syncBtn.classList.add('busy');
+                stamp.textContent = 'Sincronizando…';
+                try {
+                    await Live.refresh();
+                    stamp.textContent = `Sincronizado às ${now()}`;
+                } catch {
+                    stamp.textContent = 'Não foi possível sincronizar. Tente novamente.';
+                } finally {
+                    syncBtn.classList.remove('busy');
+                }
+            });
+
+            Live.start({
+                // Never swap the table out from under someone typing, choosing a status or saving.
+                canSwap: () => saving === 0 && !document.getElementById('live-children').contains(document.activeElement),
+                afterSwap: () => { stamp.textContent = `Atualizado automaticamente às ${now()}`; },
+            });
+
+            // After "Adicionar criança": highlight the new row and put the cursor in its name.
+            const focusId = new URLSearchParams(location.search).get('focus');
+            if (focusId) {
+                const tr = document.getElementById(`row-${focusId}`);
+                if (tr) {
+                    tr.classList.add('just-added');
+                    tr.querySelector(`td[data-col="${NAME_COL}"]`)?.focus();
+                }
+                history.replaceState(null, '', location.pathname);
+            }
+        })();
+    </script>
+}

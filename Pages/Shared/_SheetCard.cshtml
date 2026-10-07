@@ -1,0 +1,66 @@
+@model SheetCard
+@*
+    One spreadsheet on the admin page: either linked to a file on this computer (the system works
+    on that file directly) or a copy uploaded through the site.
+*@
+<div class="card">
+    <h2>@Model.Title</h2>
+    <div id="@Model.MetaId" data-live>
+        <p class="muted">
+            @if (Model.Data.IsEmpty)
+            {
+                <text>Nenhuma planilha ainda.</text>
+            }
+            else
+            {
+                <text>@Model.Data.Rows.Count linhas · atualizada em @Model.Data.LastModified?.ToString("dd/MM/yyyy HH:mm:ss")</text>
+            }
+        </p>
+    </div>
+
+    @if (Model.Link is not null)
+    {
+        <div class="linked">
+            <span class="badge">Vinculada</span>
+            <code class="path" title="@Model.Link">@Model.Link</code>
+        </div>
+        <p class="hint muted">O sistema lê e grava direto nesse arquivo. Depois de editar no Excel, salve e <strong>feche</strong> o arquivo.</p>
+        <div class="card-actions">
+            <a class="link" asp-page-handler="@("Download" + Model.Handler)">Baixar cópia</a>
+            <form method="post" asp-page-handler="@("Unlink" + Model.Handler)"
+                  onsubmit="return confirm('Desvincular? O sistema passa a usar uma cópia dos dados atuais, e o arquivo deixa de ser atualizado.')">
+                <button class="btn btn-small">Desvincular</button>
+            </form>
+        </div>
+    }
+    else
+    {
+        <form method="post" asp-page-handler="@("Link" + Model.Handler)" class="upload">
+            <input type="text" name="path" class="path-input" required spellcheck="false"
+                   placeholder="C:\Users\...\planilha.xlsx" aria-label="Caminho do arquivo">
+            <button class="btn btn-primary">Vincular</button>
+        </form>
+        <p class="hint muted">
+            Vincule ao arquivo do computador para o sistema trabalhar direto nele. No Explorador de Arquivos,
+            clique com o botão direito no arquivo → <em>Copiar como caminho</em> (ou <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>) e cole acima.
+        </p>
+        <details class="alt">
+            <summary>Ou enviar uma cópia do arquivo</summary>
+            <form method="post" asp-page-handler="@("Upload" + Model.Handler)" enctype="multipart/form-data" class="upload"
+                  onsubmit="@(Model.ConfirmReplace && !Model.Data.IsEmpty ? "return confirm('Enviar uma nova planilha substitui todos os dados atuais, inclusive as alterações feitas pelo site. Continuar?')" : null)">
+                <input type="file" name="file" accept=".xlsx" required>
+                <button class="btn">Enviar</button>
+            </form>
+            <p class="hint muted">Uma cópia não acompanha alterações feitas depois no arquivo original.</p>
+        </details>
+        @if (!Model.Data.IsEmpty)
+        {
+            <a class="link" asp-page-handler="@("Download" + Model.Handler)">Baixar planilha atual</a>
+        }
+    }
+
+    @if (Model.Columns is not null)
+    {
+        <p class="hint muted columns">Colunas, nesta ordem (os nomes podem variar): @Model.Columns</p>
+    }
+</div>

@@ -1,0 +1,74 @@
+@{
+    var page = ViewContext.RouteData.Values["page"] as string;
+}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0d1f17">
+    <title>@ViewData["Title"] · Natal Solidário @DateTime.Now.Year</title>
+    <link rel="icon" type="image/svg+xml" href="~/img/icone-favicon.svg" asp-append-version="true">
+    <link rel="apple-touch-icon" href="~/img/icone-512.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat+Brush&family=Caveat:wght@500;700&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800;6..12,900&display=swap">
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true">
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" asp-page="/Index">
+                <img class="brand-mark" src="~/img/icone.svg" asp-append-version="true" width="42" height="42" alt="">
+
+                <span class="brand-text">
+                    <span class="brand-title">Natal Solidário <em>@DateTime.Now.Year</em></span>
+                    <small>Creche Mundo Infantil · Santa Marta</small>
+                </span>
+            </a>
+            <nav aria-label="Navegação principal">
+                <a asp-page="/Index" class="@(page == "/Index" ? "active" : null)">Crianças</a>
+                <span class="nav-sep" aria-hidden="true"></span>
+                <span class="nav-team">Equipe</span>
+                <a asp-page="/Admin" class="@(page == "/Admin" ? "active" : null)">Administração</a>
+                <a asp-page="/Emails" class="@(page == "/Emails" ? "active" : null)">E-mails</a>
+            </nav>
+        </div>
+    </header>
+
+    @await RenderSectionAsync("Hero", required: false)
+
+    <main class="container" data-sheet-version="@ViewData["SheetVersion"]">
+        @if (TempData["Message"] is string message)
+        {
+            <div class="flash flash-ok" role="status">@message</div>
+        }
+        @if ((TempData["Error"] ?? ViewData["Error"]) is string error)
+        {
+            <div class="flash flash-error" role="alert">@error</div>
+        }
+        @RenderBody()
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-inner">
+            <div class="footer-logo">
+                <img src="~/img/icone.svg" asp-append-version="true" width="58" height="58" alt="">
+
+                <span>Creche Comunitária<strong>Mundo Infantil</strong></span>
+            </div>
+            <address>
+                <strong>Obras Sociais Unidas de Santa Marta</strong>
+                Rua do Jabuti nº 9 (3ª parada do plano inclinado)<br>
+                Botafogo · Santa Marta · Rio de Janeiro<br>
+                <a href="mailto:crechemi@hotmail.com">crechemi@hotmail.com</a> · Contato: Adriana · (21) 2537-5855
+            </address>
+            <p class="footer-script">Juntos por um Natal<br>mais feliz! ♡</p>
+        </div>
+    </footer>
+
+    <script src="~/js/live.js" asp-append-version="true"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

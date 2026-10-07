@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Natal Solidário</title>
+  <!-- Simplified mark for the browser tab: at 16px the ring of children would blur, so just the ring and the heart with the key. -->
+  <rect width="32" height="32" rx="8" fill="#0f2a1c"/>
+  <circle cx="16" cy="16" r="12.6" fill="none" stroke="#e2b456" stroke-width="2.2"/>
+  <path d="M16 24.6C9.6 20.6 7.9 17 9.1 14.1C10.3 11.3 14 10.9 16 13.6C18 10.9 21.7 11.3 22.9 14.1C24.1 17 22.4 20.6 16 24.6Z" fill="#d23a2f"/>
+  <g fill="none" stroke="#f6efe2" stroke-width="1.5" stroke-linecap="round">
+    <circle cx="13" cy="17.4" r="1.7"/>
+    <path d="M14.7 17.4H19.6M18.3 17.4V18.9M19.6 17.4V19.3"/>
+  </g>
+</svg>

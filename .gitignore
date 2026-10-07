@@ -1,0 +1,9 @@
+bin/
+obj/
+.vs/
+*.user
+
+# Uploaded spreadsheets contain personal data about children - never commit them.
+data/
+# Spreadsheets with children's data (e.g. sample files dropped in the project root).
+*.xlsx
