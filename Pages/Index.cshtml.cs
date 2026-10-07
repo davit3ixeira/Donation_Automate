@@ -7,17 +7,22 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace DonationAutomate.Pages;
 
-public class IndexModel(SpreadsheetStore store, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, IWebHostEnvironment env, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>One child as shown on a card, already formatted for reading.</summary>
     public sealed record ChildCard(
         string Id, string Name, string FirstName, string Initials, string Turma, string AgeGroup,
         string Age, string Shoes, string Clothes, string Search, string Color);
 
+    /// <summary>A photo of a past Christmas party, from wwwroot/img.</summary>
+    public sealed record YearPhoto(int Year, string Src);
+
     public bool HasSpreadsheet { get; private set; }
     public IReadOnlyList<ChildCard> Children { get; private set; } = [];
     public IReadOnlyList<(string Turma, int Count)> Turmas { get; private set; } = [];
     public CampaignStats Stats { get; private set; } = new(0, 0, 0, 0);
+    public SiteSettings SiteSettings { get; private set; } = new();
+    public IReadOnlyList<YearPhoto> YearPhotos { get; private set; } = [];
 
     /// <summary>Set right after a successful request, to show the thank-you.</summary>
     public string? ThanksName { get; private set; }
@@ -114,6 +119,8 @@ public class IndexModel(SpreadsheetStore store, ILogger<IndexModel> logger) : Pa
     private void Load()
     {
         ViewData["SheetVersion"] = store.Version();
+        SiteSettings = siteSettings.Get();
+        YearPhotos = LoadYearPhotos();
         SheetData sheet;
         try
         {
@@ -138,7 +145,27 @@ public class IndexModel(SpreadsheetStore store, ILogger<IndexModel> logger) : Pa
             .ToList();
     }
 
-    private static readonly string[] AvatarColors = ["#b8322a", "#1f5a3d", "#9a6e1c", "#2e7d5b", "#1f4f8a", "#a4462c"];
+    private static readonly Regex YearInName = new(@"(?<!\d)(?:19|20)\d{2}(?!\d)");
+    private static readonly HashSet<string> PhotoExtensions = new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp" };
+
+    /// <summary>Every image in wwwroot/img with a year in its name (e.g. "ccmi 2019.jpg"), oldest first.</summary>
+    private IReadOnlyList<YearPhoto> LoadYearPhotos()
+    {
+        var dir = Path.Combine(env.WebRootPath, "img");
+        if (!Directory.Exists(dir)) return [];
+
+        return Directory.EnumerateFiles(dir)
+            .Select(path => Path.GetFileName(path))
+            .Where(name => PhotoExtensions.Contains(Path.GetExtension(name)))
+            .Select(name => (Name: name, Year: YearInName.Match(Path.GetFileNameWithoutExtension(name))))
+            .Where(x => x.Year.Success)
+            .OrderBy(x => x.Year.Value, StringComparer.Ordinal)
+            .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new YearPhoto(int.Parse(x.Year.Value), Url.Content($"~/img/{Uri.EscapeDataString(x.Name)}")))
+            .ToList();
+    }
+
+    private static readonly string[] AvatarColors =["#b8322a", "#1f5a3d", "#9a6e1c", "#2e7d5b", "#1f4f8a", "#a4462c"];
 
     private static ChildCard ToCard(SheetRow row)
     {
@@ -163,6 +190,8 @@ public class IndexModel(SpreadsheetStore store, ILogger<IndexModel> logger) : Pa
     private static readonly HashSet<string> Particles = ["da", "de", "do", "das", "dos", "e"];
     private static readonly Regex Roman = new(@"^(i{1,3}|iv|vi{0,3}|ix|x)$", RegexOptions.IgnoreCase);
     private static readonly CultureInfo PtBr = new("pt-BR");
+
+    public static string FormatDate(DateOnly date) => date.ToString("d 'de' MMMM 'de' yyyy", PtBr);
 
     /// <summary>
     /// "ANNA JASMIN DO N. SANTOS" → "Anna Jasmin do N. Santos", "BERÇÁRIO II" → "Berçário II".

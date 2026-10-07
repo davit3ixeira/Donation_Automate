@@ -14,15 +14,29 @@
     </div>
     <div class="sync">
         <span id="sync-stamp" class="muted" aria-live="polite"></span>
-        <a id="sync" class="btn" asp-route-filter="@Model.Filter">Sincronizar</a>
     </div>
 </div>
 
 <section class="cards">
+    <div class="card">
+        <h2>Calendário do site</h2>
+        <p class="muted">Datas mostradas na página inicial, no bloco "Calendário".</p>
+        <form method="post" asp-page-handler="SiteSettings">
+            <div class="field">
+                <label for="kitsDeadline">Entrega dos Kits (até)</label>
+                <input type="date" id="kitsDeadline" name="kitsDeadline" value="@Model.SiteSettings.KitsDeadline.ToString("yyyy-MM-dd")" required>
+            </div>
+            <div class="field">
+                <label for="festa">Festa de Natal na Creche</label>
+                <input type="date" id="festa" name="festa" value="@Model.SiteSettings.Festa.ToString("yyyy-MM-dd")" required>
+            </div>
+            <button class="btn btn-primary">Salvar datas</button>
+        </form>
+    </div>
     <partial name="_SheetCard" model="Model.ChildrenCard" />
 </section>
 
-@* Refreshed in place by live.js whenever the spreadsheet changes, or on Sincronizar. *@
+@* Refreshed in place by live.js whenever the spreadsheet changes. *@
 <div id="live-children" data-live>
     @if (!Model.Children.IsEmpty)
     {
@@ -30,7 +44,7 @@
         <section>
             <div class="section-head">
                 <h2>
-                    Crianças
+                    Doar
                     @if (Model.Counts[ChildStatus.Approved] > 0)
                     {
                         <span class="kit-summary">🎁 @Model.KitsDelivered de @Model.Counts[ChildStatus.Approved] kits entregues</span>
@@ -53,7 +67,6 @@
                     </form>
                 </div>
             </div>
-            <p class="hint muted">Clique em uma célula para editar. <kbd>Enter</kbd> salva, <kbd>Esc</kbd> cancela.</p>
 
             @if (Model.FilteredRows.Count == 0)
             {
@@ -301,20 +314,6 @@
                     const id = form.closest('tr').dataset.id;
                     if (!confirm(`Excluir a criança nº ${id}${name ? ` (${name})` : ''}? A linha será apagada da planilha.`))
                         e.preventDefault();
-                }
-            });
-
-            syncBtn.addEventListener('click', async e => {
-                e.preventDefault();
-                syncBtn.classList.add('busy');
-                stamp.textContent = 'Sincronizando…';
-                try {
-                    await Live.refresh();
-                    stamp.textContent = `Sincronizado às ${now()}`;
-                } catch {
-                    stamp.textContent = 'Não foi possível sincronizar. Tente novamente.';
-                } finally {
-                    syncBtn.classList.remove('busy');
                 }
             });
 

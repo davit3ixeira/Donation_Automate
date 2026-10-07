@@ -56,7 +56,7 @@ Each spreadsheet is either **linked** to a file on this computer or an **uploade
 Either way, the file is the source of truth:
 
 - Every page load reads the file, and every change is written straight back into it.
-- Open pages check for changes every 5 seconds and update their tables in place, without reloading (ticked checkboxes on the user page are kept). The admin page also has a **Sincronizar** button to update immediately.
+- Open pages check for changes every 5 seconds and update their tables in place, without reloading (ticked checkboxes on the user page are kept).
 - While the spreadsheet is open in Excel, the site can still read it but cannot save, and shows a message asking to close it.
 
 ## Not done yet

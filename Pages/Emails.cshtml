@@ -13,7 +13,6 @@
     </div>
     <div class="sync">
         <span id="sync-stamp" class="muted" aria-live="polite"></span>
-        <a id="sync" class="btn" asp-page="/Emails">Sincronizar</a>
     </div>
 </div>
 
@@ -314,19 +313,6 @@
                 const start = area.selectionStart ?? area.value.length;
                 area.setRangeText(chip.dataset.insert, start, area.selectionEnd ?? start, 'end');
                 area.focus();
-            });
-
-            syncBtn.addEventListener('click', async e => {
-                e.preventDefault();
-                syncBtn.classList.add('busy');
-                try {
-                    await Live.refresh();
-                    stamp.textContent = `Sincronizado às ${now()}`;
-                } catch {
-                    stamp.textContent = 'Não foi possível sincronizar. Tente novamente.';
-                } finally {
-                    syncBtn.classList.remove('busy');
-                }
             });
 
             Live.start({

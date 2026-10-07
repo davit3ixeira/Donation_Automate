@@ -3,11 +3,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DonationAutomate.Pages;
 
-public class AdminModel(SpreadsheetStore store, MailService mail) : SheetPageModel(store)
+public class AdminModel(SpreadsheetStore store, MailService mail, SiteSettingsStore siteSettings) : SheetPageModel(store)
 {
     public SheetData Children { get; private set; } = SheetData.Empty;
     public IReadOnlyList<SheetRow> FilteredRows { get; private set; } = [];
     public Dictionary<string, int> Counts { get; } = ChildStatus.All.ToDictionary(s => s, _ => 0);
+    public SiteSettings SiteSettings { get; private set; } = new();
 
     /// <summary>Optional status filter for the children table (null = all).</summary>
     [BindProperty(SupportsGet = true)]
@@ -21,6 +22,7 @@ public class AdminModel(SpreadsheetStore store, MailService mail) : SheetPageMod
     public void OnGet()
     {
         ViewData["SheetVersion"] = Store.Version();
+        SiteSettings = siteSettings.Get();
         try
         {
             Children = Store.ReadChildren();
@@ -155,4 +157,11 @@ public class AdminModel(SpreadsheetStore store, MailService mail) : SheetPageMod
 
     public IActionResult OnPostDeleteRow(string id) =>
         Run(() => Store.DeleteChild(id), () => $"Criança nº {id} excluída.");
+
+    public IActionResult OnPostSiteSettings(string? kitsDeadline, string? festa)
+    {
+        siteSettings.Save(kitsDeadline, festa);
+        TempData["Message"] = "Datas do calendário atualizadas.";
+        return RedirectToPage(RouteValues);
+    }
 }

@@ -27,11 +27,19 @@
                 </span>
             </a>
             <nav aria-label="Navegação principal">
-                <a asp-page="/Index" class="@(page == "/Index" ? "active" : null)">Crianças</a>
+                <a asp-page="/Index" class="@(page == "/Index" ? "active" : null)">Doações</a>
                 <span class="nav-sep" aria-hidden="true"></span>
-                <span class="nav-team">Equipe</span>
-                <a asp-page="/Admin" class="@(page == "/Admin" ? "active" : null)">Administração</a>
-                <a asp-page="/Emails" class="@(page == "/Emails" ? "active" : null)">E-mails</a>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <span class="nav-team">Equipe</span>
+                    <a asp-page="/Admin" class="@(page == "/Admin" ? "active" : null)">Administração</a>
+                    <a asp-page="/Emails" class="@(page == "/Emails" ? "active" : null)">E-mails</a>
+                    <a asp-page="/Logout">Sair</a>
+                }
+                else
+                {
+                    <a asp-page="/Login">Equipe</a>
+                }
             </nav>
         </div>
     </header>
@@ -61,7 +69,6 @@
                 <strong>Obras Sociais Unidas de Santa Marta</strong>
                 Rua do Jabuti nº 9 (3ª parada do plano inclinado)<br>
                 Botafogo · Santa Marta · Rio de Janeiro<br>
-                <a href="mailto:crechemi@hotmail.com">crechemi@hotmail.com</a> · Contato: Adriana · (21) 2537-5855
             </address>
             <p class="footer-script">Juntos por um Natal<br>mais feliz! ♡</p>
         </div>
