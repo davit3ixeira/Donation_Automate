@@ -190,7 +190,6 @@
 
         <div class="memories-carousel" data-carousel role="region" aria-roledescription="carrossel" aria-label="Fotos dos Natais anteriores">
             <div class="memories-stage" data-stage>
-                <div class="hero-bokeh" aria-hidden="true"></div>
                 @for (var i = 0; i < photos.Count; i++)
                 {
                     var p = photos[i];
@@ -403,13 +402,7 @@
     </div>
     <div class="quote">
         <p class="note quote-text">“Porque toda criança merece viver a magia do Natal.”</p>
-        <svg class="skyline" viewBox="0 0 300 150" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
-            @* The hill climbs along a straight slope; each little house stands on it. *@
-            <path d="M4 146 240 40c8-4 15-8 22-10"/>
-            <path d="M262 2v28M254 10h16"/>
-            <path d="M40 130v-14l8-6 8 6v14M62 120v-18l8-6 8 6v18M84 110v-16l8-6 8 6v16M106 100v-20l8-6 8 6v20M128 90v-16l8-6 8 6v16M150 80v-18l8-6 8 6v18M172 70v-14l8-6 8 6v14M194 61v-16l8-6 8 6v16M216 51v-12l8-6 8 6v12"/>
-            <path d="M46 123h4M68 111h4M90 102h4M112 90h4M134 82h4M156 71h4M178 63h4M200 53h4"/>
-        </svg>
+        @Html.Raw(SantaMartaIllustration.Svg)
         <p class="note skyline-label">Santa Marta<br>Rio de Janeiro</p>
     </div>
 </section>

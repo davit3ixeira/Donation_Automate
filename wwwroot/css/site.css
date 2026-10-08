@@ -616,10 +616,26 @@ dl.stats dd small { font-size: 0.8rem; color: var(--muted); font-family: var(--f
 .more-star svg { fill: var(--gold); }
 .more p { margin: 10px 0 0; font-size: 1.05rem; color: rgba(246, 239, 226, 0.85); }
 .more strong { color: var(--gold-bright); }
-.quote { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 6px 12px; color: var(--gold); padding-top: 18px; }
-.quote-text { grid-column: 1 / -1; font-size: clamp(1.7rem, 3vw, 2.2rem); color: var(--cream); transform: rotate(-3deg); max-width: 18ch; }
-.skyline { width: 100%; max-width: 300px; height: auto; color: var(--gold); opacity: 0.85; }
-.skyline-label { font-size: 1.25rem; transform: rotate(-6deg); color: var(--gold-bright); }
+/* The quote is written in the sky of the Morro Dona Marta drawing. */
+.quote { position: relative; color: var(--gold); padding: 0; }
+.quote-text {
+    position: absolute; z-index: 1; top: 14px; left: 6px;
+    font-size: clamp(1.7rem, 3vw, 2.2rem); color: var(--cream); transform: rotate(-3deg); max-width: 15ch;
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7);
+}
+.skyline-label {
+    position: absolute; right: 10px; bottom: 8px; font-size: 1.25rem; transform: rotate(-6deg);
+    color: var(--gold-bright); text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+/* Morro Dona Marta (drawn by SantaMartaIllustration.cs), fading into the page at the edges */
+.santa-marta {
+    display: block; width: 100%; height: auto;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent), linear-gradient(#000 74%, transparent);
+    -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent), linear-gradient(#000 74%, transparent);
+    mask-composite: intersect;
+}
 
 /* ----------------------------------------------------------------- Past Christmases: polaroids on a string of lights */
 .memories { margin-top: 64px; text-align: center; scroll-margin-top: 84px; }
@@ -637,17 +653,19 @@ dl.stats dd small { font-size: 0.8rem; color: var(--muted); font-family: var(--f
 /* Photos are laid out by memories.js through --offset (signed distance from the photo on show)
    and --abs (its absolute value), so a drag can move them by fractions. */
 .memories-stage {
+    --edge-fade: 14%;
     position: relative; isolation: isolate; overflow: hidden;
     height: calc(var(--slide) * 1.16 + 96px);
     touch-action: pan-y; user-select: none; -webkit-user-select: none;
-    mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+    background: radial-gradient(closest-side, rgba(226, 180, 86, 0.18), rgba(210, 58, 47, 0.07) 55%, transparent);
 }
-.memories-stage::before {
-    content: ""; position: absolute; z-index: -1; left: 50%; top: 50%;
-    width: calc(var(--slide) * 2.2); aspect-ratio: 1; transform: translate(-50%, -50%);
-    background: radial-gradient(closest-side, rgba(226, 180, 86, 0.2), rgba(210, 58, 47, 0.08) 55%, transparent);
+/* The far photos fade into the page at the edges: two narrow gradient strips on top. (A
+   mask-image on the stage, or one overlay across all of it, made the slide transition stutter.) */
+.memories-stage::before, .memories-stage::after {
+    content: ""; position: absolute; z-index: 200; top: 0; bottom: 0; width: var(--edge-fade); pointer-events: none;
 }
-.memories-stage .hero-bokeh { opacity: 0.7; }
+.memories-stage::before { left: 0; background: linear-gradient(90deg, var(--bg), transparent); }
+.memories-stage::after { right: 0; background: linear-gradient(-90deg, var(--bg), transparent); }
 
 .memory {
     --offset: 0; --abs: 0; --tilt: -1.5deg; --tape: rgba(226, 180, 86, 0.66);
@@ -736,8 +754,7 @@ dl.stats dd small { font-size: 0.8rem; color: var(--muted); font-family: var(--f
 .ring-track { stroke: var(--border-strong); }
 .ring-progress { stroke: var(--gold); stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; }
 .memories-carousel.is-playing .ring-progress { animation: ring-fill var(--autoplay) linear forwards; }
-.memories-carousel.is-held .ring-progress,
-.memories-carousel:has(:focus-visible:not([data-play])) .ring-progress { animation-play-state: paused; }
+.memories-carousel.is-held .ring-progress { animation-play-state: paused; }
 .memories-play .icon-play, .memories-carousel:not(.is-playing) .memories-play .icon-pause { display: none; }
 .memories-carousel:not(.is-playing) .memories-play .icon-play { display: block; margin-left: 2px; }
 .memories-play > span { display: grid; place-items: center; }
@@ -1038,9 +1055,11 @@ dialog.viewer::backdrop { background: rgba(3, 10, 7, 0.9); }
     .child-grid { grid-template-columns: minmax(0, 1fr); }
     .hero-actions .btn { flex: 1 1 auto; }
     .more { padding-left: 26px; padding-top: 64px; }
-    .quote { grid-template-columns: 1fr; }
+    /* too narrow to write over the sky: the quote goes above the drawing */
+    .quote-text { position: static; max-width: 18ch; margin-bottom: -4px; }
+    .skyline-label { font-size: 1rem; right: 6px; bottom: 4px; }
     .memories-carousel { --spread-ratio: 0.6; }
-    .memories-stage { margin: 0 -16px; mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+    .memories-stage { margin: 0 -16px; --edge-fade: 8%; }
     .memories-timeline { margin-inline: -8px; }
     .bulb-light { width: 12px; height: 16px; }
 }

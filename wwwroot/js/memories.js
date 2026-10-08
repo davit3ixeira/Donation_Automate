@@ -72,7 +72,7 @@
 
     // ------------------------------------------------------------------ Autoplay
     // The ring around the pause button is the timer: when its fill animation ends, the next photo
-    // comes. Pausing the animation (hover, off screen, ...) pauses the slideshow with it.
+    // comes. Pausing the animation (off screen, photo enlarged, ...) pauses the slideshow with it.
 
     const holds = new Set();
     function hold(reason, on) {
@@ -105,8 +105,6 @@
         setPlaying(true);
     }
 
-    root.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') hold('hover', true); });
-    root.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hold('hover', false); });
     document.addEventListener('visibilitychange', () => hold('hidden', document.hidden));
 
     // ------------------------------------------------------------------ Entrance, and pause off screen
