@@ -249,24 +249,7 @@ section.card { margin-top: 32px; }
 
 .upload { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
 .upload input[type=file] { flex: 1; min-width: 0; font-size: 0.9rem; color: var(--muted); }
-.path-input {
-    flex: 1; min-width: 0; font: inherit; font-size: 0.92rem; padding: 9px 12px; color: var(--text);
-    border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg-deep);
-}
-.linked { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; min-width: 0; }
-.badge {
-    flex: none; font-size: 0.75rem; font-weight: 800; padding: 3px 10px; border-radius: 999px;
-    background: var(--ok-bg); color: var(--ok-text);
-}
-code.path {
-    font-size: 0.84rem; padding: 4px 8px; border-radius: 6px; background: var(--bg-deep);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
-}
-.card-actions { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
-.card-actions form { margin: 0; }
 
-details.alt { margin-bottom: 10px; font-size: 0.92rem; }
-details.alt summary { cursor: pointer; color: var(--muted); margin-bottom: 8px; font-weight: 700; }
 details.card summary { cursor: pointer; list-style: none; }
 details.card summary h2 { display: inline; }
 details.card summary::before { content: "▸ "; color: var(--muted); }
@@ -368,8 +351,8 @@ select.status {
     border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg-deep);
     transition: border-color 0.2s, box-shadow 0.2s;
 }
-.field input::placeholder, .field textarea::placeholder, .path-input::placeholder, .search input::placeholder { color: #7f7867; }
-.field input:focus, .field textarea:focus, .field select:focus, .path-input:focus, select:focus {
+.field input::placeholder, .field textarea::placeholder, .search input::placeholder { color: #7f7867; }
+.field input:focus, .field textarea:focus, .field select:focus, select:focus {
     outline: none; border-color: var(--gold); box-shadow: 0 0 0 4px rgba(226, 180, 86, 0.16);
 }
 .field textarea { resize: vertical; line-height: 1.45; }
@@ -378,8 +361,6 @@ select, textarea {
     font: inherit; padding: 8px 11px; border: 1px solid var(--border-strong); border-radius: var(--radius);
     background: var(--bg-deep); color: var(--text);
 }
-.checkbox { display: flex; gap: 6px; align-items: center; font-weight: 400 !important; font-size: 0.85rem; margin-top: 6px; }
-.checkbox input { width: auto !important; }
 input[type=checkbox], input[type=radio] { width: 17px; height: 17px; cursor: pointer; accent-color: var(--gold); }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
 .form-footer { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 16px; }
@@ -437,10 +418,6 @@ dl.stats dd small { font-size: 0.8rem; color: var(--muted); font-family: var(--f
 .chip:hover { border-color: var(--gold); color: var(--gold-bright); }
 .chip:active { transform: scale(0.94); }
 .link-button { align-self: flex-start; margin-top: auto; }
-
-.server-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 16px; }
-.server-form .wide { grid-column: 1 / -1; }
-.server-form .form-footer { margin-top: 4px; }
 
 /* ==========================================================================
    Public page — laid out after the campaign flyer

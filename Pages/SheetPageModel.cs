@@ -5,10 +5,10 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace DonationAutomate.Pages;
 
 /// <summary>What the _SheetCard partial needs to show one spreadsheet.</summary>
-/// <param name="Handler">Suffix of this sheet's page handlers: Link…, Unlink…, Upload…, Download….</param>
-public record SheetCard(string Title, string Handler, string MetaId, SheetData Data, string? Link, string? Columns, bool ConfirmReplace);
+/// <param name="Handler">Suffix of this sheet's page handlers: Upload…, Download….</param>
+public record SheetCard(string Title, string Handler, string MetaId, SheetData Data, string? Columns, bool ConfirmReplace);
 
-/// <summary>Shared plumbing for pages that manage a spreadsheet: upload, download, link and unlink.</summary>
+/// <summary>Shared plumbing for pages that manage a spreadsheet: upload and download.</summary>
 public abstract class SheetPageModel(SpreadsheetStore store) : PageModel
 {
     private const string XlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

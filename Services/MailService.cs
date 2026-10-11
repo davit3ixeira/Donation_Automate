@@ -247,15 +247,6 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
         return await SendAndRecordAsync(messages, $"Aprovação: {values["crianca"]}");
     }
 
-    public Task<SendResult> SendTestAsync()
-    {
-        var s = settings.Get();
-        if (!s.Smtp.IsConfigured)
-            throw new EmailException("Preencha e salve o servidor e o e-mail do remetente primeiro.");
-        return SendAsync([new Outgoing(s.Smtp.FromName ?? "", s.Smtp.FromAddress!,
-            "Teste do sistema de doações", "Se você recebeu esta mensagem, o envio de e-mails está funcionando.")]);
-    }
-
     private async Task<SendResult> SendAndRecordAsync(IReadOnlyList<Outgoing> messages, string label)
     {
         var result = await SendAsync(messages);
@@ -293,11 +284,11 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
             var security = s.Smtp.Port == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTlsWhenAvailable;
             await client.ConnectAsync(s.Smtp.Host!, s.Smtp.Port, security);  // IsConfigured checked above
             if (!string.IsNullOrWhiteSpace(s.Smtp.User))
-                await client.AuthenticateAsync(s.Smtp.User, settings.Password(s) ?? "");
+                await client.AuthenticateAsync(s.Smtp.User, s.Smtp.Password ?? "");
         }
         catch (MailKit.Security.AuthenticationException)
         {
-            throw new EmailException("O servidor de e-mail recusou o usuário ou a senha. No Gmail, use uma \"senha de app\", não a senha normal da conta.");
+            throw new EmailException($"O servidor de e-mail ({s.Smtp.Host}) recusou o usuário ou a senha SMTP. Confira Smtp:User e Smtp:Password nas configurações do sistema.");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -328,6 +319,8 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
         var message = new MimeMessage();
         var fromAddress = s.Smtp.FromAddress ?? "teste@exemplo.com";
         message.From.Add(new MailboxAddress(s.Smtp.FromName ?? fromAddress, fromAddress));
+        if (!string.IsNullOrWhiteSpace(s.Smtp.ReplyTo))
+            message.ReplyTo.Add(new MailboxAddress(s.Smtp.FromName ?? "", s.Smtp.ReplyTo.Trim()));
         message.To.Add(new MailboxAddress(m.Name, m.Email));
         message.Subject = m.Subject;
         message.Body = new BodyBuilder { TextBody = m.Body, HtmlBody = ToHtml(m.Body) }.ToMessageBody();

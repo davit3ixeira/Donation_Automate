@@ -4,6 +4,14 @@ using DonationAutomate.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Login, email server and other internal settings for a development machine (git-ignored). On
+// the server they come from environment variables instead; see appsettings.Local.example.json.
+// Environment variables and command-line arguments are added again so they still win over it.
+builder.Configuration
+    .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables()
+    .AddCommandLine(args);
+
 builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AuthorizePage("/Admin");
@@ -24,7 +32,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     });
 builder.Services.AddAuthorization();
 
-// Encrypts the saved SMTP password. A fixed name keeps the keys valid if the project folder moves.
+// Protects the login cookie. A fixed name keeps the keys valid if the project folder moves.
 builder.Services.AddDataProtection().SetApplicationName("DonationAutomate");
 
 var app = builder.Build();

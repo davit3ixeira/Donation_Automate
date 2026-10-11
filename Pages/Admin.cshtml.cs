@@ -16,7 +16,7 @@ public class AdminModel(SpreadsheetStore store, MailService mail, SiteSettingsSt
 
     protected override object RouteValues => new { Filter };
 
-    public SheetCard ChildrenCard => new("Planilha de crianças", "Children", "live-children-meta", Children, Store.ChildrenLink,
+    public SheetCard ChildrenCard => new("Planilha de crianças", "Children", "live-children-meta", Children,
         ChildColumns.ExpectedList, ConfirmReplace: true);
 
     public void OnGet()
@@ -67,13 +67,6 @@ public class AdminModel(SpreadsheetStore store, MailService mail, SiteSettingsSt
 
     public Task<IActionResult> OnPostUploadChildrenAsync(IFormFile? file) =>
         UploadAsync(file, Store.ReplaceChildren, "Planilha de crianças enviada.");
-
-    public IActionResult OnPostLinkChildren(string? path) =>
-        Run(() => Store.LinkChildren(path),
-            () => $"Planilha de crianças vinculada a {Store.ChildrenLink}. Alterações salvas nesse arquivo aparecem aqui automaticamente, e alterações feitas aqui são gravadas nele.");
-
-    public IActionResult OnPostUnlinkChildren() =>
-        Run(Store.UnlinkChildren, () => "Planilha de crianças desvinculada. O sistema continua com uma cópia dos dados atuais.");
 
     public IActionResult OnGetDownloadChildren() => Download(Store.ChildrenPath, "criancas.xlsx");
 

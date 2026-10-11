@@ -151,10 +151,8 @@ public sealed record StatusChange(string Previous, string Current, IReadOnlyList
 
 /// <summary>
 /// Treats the spreadsheets as the source of truth: every read opens the file, every change is
-/// written straight back to it. Each spreadsheet is either a copy kept in the data folder
-/// (uploaded through the site) or a file elsewhere on this computer that the admin linked, in
-/// which case the system works on that very file. Either way, editing the file is visible in
-/// the site right away, and vice versa.
+/// written straight back to it. Each spreadsheet is the copy uploaded through the site and kept
+/// in the data folder; the admin downloads it to get the current data.
 /// </summary>
 public sealed class SpreadsheetStore
 {
@@ -162,31 +160,17 @@ public sealed class SpreadsheetStore
     private const int HeaderSearchRows = 50;
 
     private readonly Lock _gate = new();
-    private readonly string _defaultChildrenPath;
-    private readonly string _defaultEmailsPath;
-    private readonly string _settingsPath;
-    private SheetLinks _links;
-
-    /// <summary>Linked files, saved in the data folder so they survive a restart.</summary>
-    private sealed record SheetLinks(string? Children = null, string? Emails = null);
 
     public SpreadsheetStore(IConfiguration config, IWebHostEnvironment env)
     {
         var dir = Path.Combine(env.ContentRootPath, config["DataDirectory"] ?? "data");
         Directory.CreateDirectory(dir);
-        _defaultChildrenPath = Path.Combine(dir, "children.xlsx");
-        _defaultEmailsPath = Path.Combine(dir, "emails.xlsx");
-        _settingsPath = Path.Combine(dir, "settings.json");
-        _links = LoadLinks(_settingsPath);
+        ChildrenPath = Path.Combine(dir, "children.xlsx");
+        EmailsPath = Path.Combine(dir, "emails.xlsx");
     }
 
-    /// <summary>The file the system currently works on: the linked file, or its own copy.</summary>
-    public string ChildrenPath => _links.Children ?? _defaultChildrenPath;
-    public string EmailsPath => _links.Emails ?? _defaultEmailsPath;
-
-    /// <summary>The linked file, or null when the system works on its own copy.</summary>
-    public string? ChildrenLink => _links.Children;
-    public string? EmailsLink => _links.Emails;
+    public string ChildrenPath { get; }
+    public string EmailsPath { get; }
 
     /// <summary>
     /// Changes whenever either spreadsheet file changes, however it was changed. Cheap enough
@@ -208,7 +192,7 @@ public sealed class SpreadsheetStore
         {
             var path = ChildrenPath;
             if (!File.Exists(path))
-                return ChildrenLink is null ? SheetData.Empty : throw MissingLink(path);
+                return SheetData.Empty;
             using var wb = LoadExisting(path);
             return Read(ChildrenTable(wb), ChildColumns.PublicCount, ChildColumns.Id, File.GetLastWriteTime(path));
         }
@@ -220,7 +204,7 @@ public sealed class SpreadsheetStore
         {
             var path = EmailsPath;
             if (!File.Exists(path))
-                return EmailsLink is null ? SheetData.Empty : throw MissingLink(path);
+                return SheetData.Empty;
             using var wb = LoadExisting(path);
             var table = FindTable(wb, EmailColumns.Expected.Count);
             return table is null ? SheetData.Empty : Read(table, EmailColumns.Expected.Count, keyIndex: null, File.GetLastWriteTime(path));
@@ -241,71 +225,24 @@ public sealed class SpreadsheetStore
 
     public void ReplaceChildren(Stream upload)
     {
-        if (ChildrenLink is not null)
-            throw new SpreadsheetException("A planilha de crianças está vinculada a um arquivo. Edite esse arquivo, ou desvincule antes de enviar outro.");
-
         using var wb = OpenUpload(upload);
-        ValidateChildren(ChildrenTable(wb), normalize: true);
-        lock (_gate) Save(wb, _defaultChildrenPath);
+        ValidateChildren(ChildrenTable(wb));
+        lock (_gate) Save(wb, ChildrenPath);
     }
 
     public void ReplaceEmails(Stream upload)
     {
-        if (EmailsLink is not null)
-            throw new SpreadsheetException("A planilha de e-mails está vinculada a um arquivo. Edite esse arquivo, ou desvincule antes de enviar outro.");
-
         using var wb = OpenUpload(upload);
         ValidateEmails(EmailsTable(wb));
-        lock (_gate) Save(wb, _defaultEmailsPath);
-    }
-
-    /// <summary>
-    /// From now on, work directly on this file. It is checked first but not changed: it is only
-    /// written to when something changes in the site.
-    /// </summary>
-    public void LinkChildren(string? input)
-    {
-        var path = CheckLinkPath(input);
-        using (var wb = LoadExisting(path))
-            ValidateChildren(ChildrenTable(wb), normalize: false);
-        lock (_gate) SetLinks(_links with { Children = path });
-    }
-
-    public void LinkEmails(string? input)
-    {
-        var path = CheckLinkPath(input);
-        using (var wb = LoadExisting(path))
-            ValidateEmails(EmailsTable(wb));
-        lock (_gate) SetLinks(_links with { Emails = path });
-    }
-
-    public void UnlinkChildren()
-    {
-        lock (_gate)
-        {
-            if (_links.Children is not { } linked) return;
-            CopyInto(linked, _defaultChildrenPath);
-            SetLinks(_links with { Children = null });
-        }
-    }
-
-    public void UnlinkEmails()
-    {
-        lock (_gate)
-        {
-            if (_links.Emails is not { } linked) return;
-            CopyInto(linked, _defaultEmailsPath);
-            SetLinks(_links with { Emails = null });
-        }
+        lock (_gate) Save(wb, EmailsPath);
     }
 
     /// <summary>
     /// Checks every child row has a unique id and a known status. Columns are matched by position,
     /// so an unknown status usually means the columns are out of order: better to refuse the file
-    /// than to misread every row. With <paramref name="normalize"/>, statuses are rewritten in
-    /// their standard spelling.
+    /// than to misread every row. Statuses are rewritten in their standard spelling.
     /// </summary>
-    private static void ValidateChildren(Table t, bool normalize)
+    private static void ValidateChildren(Table t)
     {
         var seen = new Dictionary<string, int>();
         foreach (var r in ContentRows(t, ChildColumns.PublicCount))
@@ -322,61 +259,8 @@ public sealed class SpreadsheetStore
                 throw new SpreadsheetException(
                     $"Linha {r}: \"{status}\" não é um status válido. A {ChildColumns.Status + 1}ª coluna da tabela ({t.Headers[ChildColumns.Status]}) " +
                     $"deve conter Disponível, Pendente ou Aprovado. Confira se as colunas estão na ordem: {ChildColumns.ExpectedList}.");
-            if (normalize)
-                cell.Value = ChildStatus.Label(status);
+            cell.Value = ChildStatus.Label(status);
         }
-    }
-
-    private static string CheckLinkPath(string? input)
-    {
-        // Explorer's "Copiar como caminho" wraps the path in quotes.
-        var path = Environment.ExpandEnvironmentVariables((input ?? "").Trim().Trim('"').Trim());
-        if (path == "")
-            throw new SpreadsheetException("Informe o caminho do arquivo.");
-        if (!Path.IsPathFullyQualified(path))
-            throw new SpreadsheetException(@"Informe o caminho completo do arquivo, por exemplo C:\Users\voce\Documents\criancas.xlsx.");
-        if (!Path.GetExtension(path).Equals(".xlsx", StringComparison.OrdinalIgnoreCase))
-            throw new SpreadsheetException("O arquivo precisa ser uma planilha .xlsx.");
-        if (!File.Exists(path))
-            throw new SpreadsheetException($"Arquivo não encontrado: {path}");
-        return Path.GetFullPath(path);
-    }
-
-    private static SpreadsheetException MissingLink(string path) =>
-        new($"O arquivo vinculado não foi encontrado: {path}. Ele foi movido, renomeado ou apagado? Vincule o arquivo de novo na Administração.");
-
-    private void SetLinks(SheetLinks links)
-    {
-        File.WriteAllText(_settingsPath, System.Text.Json.JsonSerializer.Serialize(links, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
-        _links = links;
-    }
-
-    private static SheetLinks LoadLinks(string settingsPath)
-    {
-        try
-        {
-            return File.Exists(settingsPath)
-                ? System.Text.Json.JsonSerializer.Deserialize<SheetLinks>(File.ReadAllText(settingsPath)) ?? new()
-                : new();
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            return new();
-        }
-    }
-
-    /// <summary>
-    /// Copies the linked file into the system's own copy when unlinking, so the site carries on
-    /// with the current data rather than whatever was uploaded before.
-    /// </summary>
-    private static void CopyInto(string source, string destination)
-    {
-        if (!File.Exists(source)) return;
-        var temp = Path.ChangeExtension(destination, ".saving.xlsx");
-        using (var src = OpenShared(source))
-        using (var dst = File.Create(temp))
-            src.CopyTo(dst);
-        File.Move(temp, destination, overwrite: true);
     }
 
     /// <summary>Marks the given children as pending for this donor. Skips any no longer available.</summary>
@@ -548,10 +432,6 @@ public sealed class SpreadsheetStore
             {
                 wb = LoadExisting(path);
                 t = EmailsTable(wb);
-            }
-            else if (EmailsLink is not null)
-            {
-                throw MissingLink(path);
             }
             else
             {

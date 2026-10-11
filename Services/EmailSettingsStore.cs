@@ -1,6 +1,5 @@
-using System.Security.Cryptography;
 using System.Text.Json;
-using Microsoft.AspNetCore.DataProtection;
+using System.Text.Json.Serialization;
 
 namespace DonationAutomate.Services;
 
@@ -98,15 +97,17 @@ public static class TemplateKeys
     };
 }
 
+/// <summary>The "Smtp" configuration section.</summary>
 public sealed class SmtpSettings
 {
     public string? Host { get; set; }
     public int Port { get; set; } = 587;
     public string? User { get; set; }
-    /// <summary>Encrypted with ASP.NET Data Protection; never stored in plain text.</summary>
-    public string? ProtectedPassword { get; set; }
+    public string? Password { get; set; }
     public string? FromName { get; set; }
     public string? FromAddress { get; set; }
+    /// <summary>Where replies go. The sending domain receives no mail, so without it replies would bounce.</summary>
+    public string? ReplyTo { get; set; }
 
     /// <summary>Without a server and sender, emails are saved to the outbox folder instead of sent.</summary>
     public bool IsConfigured => !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(FromAddress);
@@ -114,9 +115,12 @@ public sealed class SmtpSettings
 
 public sealed class EmailSettings
 {
+    /// <summary>From configuration, not saved in the file.</summary>
+    [JsonIgnore]
     public SmtpSettings Smtp { get; set; } = new();
 
-    /// <summary>Address put in {link}. Empty means "the address the admin is using", which may be localhost.</summary>
+    /// <summary>Address put in {link}, from configuration. Empty means "the address the admin is using", which may be localhost.</summary>
+    [JsonIgnore]
     public string? SiteUrl { get; set; }
 
     public Dictionary<string, EmailTemplate> Templates { get; set; } = new();
@@ -125,22 +129,28 @@ public sealed class EmailSettings
         Templates.TryGetValue(key, out var t) ? t : TemplateKeys.Defaults[key];
 }
 
-/// <summary>Email server settings and templates, kept in data/email.json.</summary>
+/// <summary>
+/// Email settings. The templates are edited on the page and kept in data/email.json. The server,
+/// credentials, sender, reply-to and site address are internal: they come from configuration
+/// (the "Smtp" section and "SiteUrl": environment variables such as Smtp__Host on the server,
+/// appsettings.Local.json on a development machine) and are read on every use, so a changed
+/// appsettings.Local.json applies without a restart.
+/// </summary>
 public sealed class EmailSettingsStore
 {
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
+    private readonly IConfiguration _config;
     private readonly string _path;
-    private readonly IDataProtector _protector;
     private readonly Lock _gate = new();
 
-    public EmailSettingsStore(IConfiguration config, IWebHostEnvironment env, IDataProtectionProvider protection)
+    public EmailSettingsStore(IConfiguration config, IWebHostEnvironment env)
     {
+        _config = config;
         var dir = Path.Combine(env.ContentRootPath, config["DataDirectory"] ?? "data");
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "email.json");
         OutboxPath = Path.Combine(dir, "outbox");
-        _protector = protection.CreateProtector("DonationAutomate.SmtpPassword");
     }
 
     /// <summary>Where emails are saved (as .eml files) while no email server is configured.</summary>
@@ -148,7 +158,13 @@ public sealed class EmailSettingsStore
 
     public EmailSettings Get()
     {
-        lock (_gate) return Load();
+        lock (_gate)
+        {
+            var settings = Load();
+            settings.Smtp = _config.GetSection("Smtp").Get<SmtpSettings>() ?? new();
+            settings.SiteUrl = Clean(_config["SiteUrl"]);
+            return settings;
+        }
     }
 
     private EmailSettings Load()
@@ -172,37 +188,6 @@ public sealed class EmailSettingsStore
                 if (TemplateKeys.All.Contains(key))
                     s.Templates[key] = template;
         });
-
-    /// <param name="password">New password, or null/empty to keep the current one.</param>
-    public void SaveServer(string? host, int port, string? user, string? password, string? fromName, string? fromAddress, string? siteUrl) =>
-        Update(s =>
-        {
-            s.Smtp.Host = Clean(host);
-            s.Smtp.Port = port is > 0 and < 65536 ? port : 587;
-            s.Smtp.User = Clean(user);
-            if (!string.IsNullOrEmpty(password))
-                s.Smtp.ProtectedPassword = _protector.Protect(password);
-            s.Smtp.FromName = Clean(fromName);
-            s.Smtp.FromAddress = Clean(fromAddress);
-            s.SiteUrl = Clean(siteUrl);
-        });
-
-    public void ClearPassword() => Update(s => s.Smtp.ProtectedPassword = null);
-
-    /// <summary>The SMTP password, or null if none is saved or it can no longer be decrypted.</summary>
-    public string? Password(EmailSettings settings)
-    {
-        if (settings.Smtp.ProtectedPassword is not { } protectedPassword) return null;
-        try
-        {
-            return _protector.Unprotect(protectedPassword);
-        }
-        catch (CryptographicException)
-        {
-            // Encryption keys lost (e.g. moved to another computer): the admin must re-enter it.
-            return null;
-        }
-    }
 
     private void Update(Action<EmailSettings> change)
     {

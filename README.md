@@ -13,6 +13,51 @@ Then open http://localhost:5080.
 
 - `/` — user page: lists the children whose status is **disponível**. Select any number, press **Enviar**, enter an email (required) and phone (optional).
 - `/Admin` — upload the children and emails spreadsheets, see every row, change statuses (e.g. pendente → aprovado), and download the current spreadsheet.
+- `/Emails` — donors list, email templates and sending.
+
+`/Admin` and `/Emails` require the admin login (see below).
+
+## Configuration: login, email server and passwords
+
+These settings are internal: they are not editable in the site, and they are never in the code or in Git. The app reads them from configuration:
+
+| Setting | What it is | Required |
+|---|---|---|
+| `Admin:Email` | Admin login (an email address) | Yes. Without it nobody can log in. |
+| `Admin:Password` | Admin password | Yes |
+| `Smtp:Host` | SMTP server (Amazon SES São Paulo: `email-smtp.sa-east-1.amazonaws.com`) | To send* |
+| `Smtp:Port` | SMTP port (`587`; `465` also works) | No (default `587`) |
+| `Smtp:User` | SMTP username (Amazon SES: *Nome de usuário SMTP*, starts with `AKIA`) | To send |
+| `Smtp:Password` | SMTP password (Amazon SES: *Senha SMTP*) | To send |
+| `Smtp:FromName` | Sender name donors see in "From" | No |
+| `Smtp:FromAddress` | Sender address. Must be on a domain verified in SES (`@doe-natal.com.br`) | To send* |
+| `Smtp:ReplyTo` | Where replies go. Keep it the same as the ImprovMX alias below | Recommended |
+| `SiteUrl` | Site address used in `{link}` in emails, e.g. `https://doe-natal.com.br/`. Empty: the address the admin is browsing | On the server |
+
+\* Without `Smtp:Host` and `Smtp:FromAddress`, the app is in **test mode**: nothing is sent, emails are saved as `.eml` files in `data/outbox`.
+
+**Incoming mail**: the app only sends. Mail written to the sender address (`natal-creche@doe-natal.com.br`) is received by [ImprovMX](https://improvmx.com) (free plan, MX records at Registro.br) and forwarded according to the alias set in its panel. That alias is not read from this configuration: if `Smtp:ReplyTo` changes, change the alias too.
+
+The SES credentials come from the `.csv` downloaded when they were created (SES → *Configurações SMTP* → *Credenciais SMTP do IAM*). The IAM user name (`ses-smtp-user...`) is not needed. The SMTP password is shown only once: if it is lost, create new credentials.
+
+**On a development machine**: copy `appsettings.Local.example.json` to `appsettings.Local.json` (git-ignored) and fill it in. Changes to it apply without restarting the app.
+
+**On the server**: set environment variables instead, with `__` (two underscores) in place of `:`:
+
+```
+Admin__Email=natal-creche@doe-natal.com.br
+Admin__Password=...
+Smtp__Host=email-smtp.sa-east-1.amazonaws.com
+Smtp__Port=587
+Smtp__User=AKIA...
+Smtp__Password=...
+Smtp__FromName=Natal Solidário · Creche Mundo Infantil
+Smtp__FromAddress=natal-creche@doe-natal.com.br
+Smtp__ReplyTo=...
+SiteUrl=https://doe-natal.com.br/
+```
+
+Ask the project owner for the actual values; never commit them or paste them in issues or chats.
 
 ## Children spreadsheet
 
@@ -43,17 +88,14 @@ The donors spreadsheet has `nome, email` side by side (by position, header names
 - **✉** next to a donor: a free-text email to that person only.
 - **Aprovação**: when a child goes from Pendente to Aprovado on the admin page, the donor gets the approval template automatically. Status changes made directly in the Excel file don't send it.
 - All four templates are editable on the page. Placeholders such as `{nome}`, `{link}`, `{percentual_disponivel}` or `{crianca}` are filled in per recipient.
-- Templates and the email server settings are saved in `data/email.json`; the SMTP password is encrypted with ASP.NET Data Protection (keys stay on this computer).
+- Templates are saved in `data/email.json`. The email server, sender and reply-to address are not on the page: see *Configuration*.
 - **Test mode**: until an SMTP server and sender are configured, nothing is sent. Emails are saved as `.eml` files in `data/outbox` instead.
 
 ## How the spreadsheets are stored
 
-Each spreadsheet is either **linked** to a file on this computer or an **uploaded copy**:
+Each spreadsheet is uploaded through the site (**Enviar**) and stored in `data/` (configurable via `DataDirectory` in `appsettings.json`; this folder is git-ignored because it holds personal data). Later edits to the original file on the admin's computer are not seen: to get the current data, use **Baixar planilha atual**; to replace it, upload a new file.
 
-- **Linked** (recommended while the system runs on this computer): on the admin page, paste the file's full path (Explorer: right-click → *Copiar como caminho*) and press **Vincular**. The system then reads and writes that very file, so editing it in Excel shows up in the site, and changes made in the site are saved into it. The link is kept in `data/settings.json`. **Desvincular** switches back to a copy of the file's current data.
-- **Uploaded copy**: stored in `data/` (configurable via `DataDirectory` in `appsettings.json`; this folder is git-ignored because it holds personal data). Later edits to the original file are not seen.
-
-Either way, the file is the source of truth:
+The stored file is the source of truth:
 
 - Every page load reads the file, and every change is written straight back into it.
 - Open pages check for changes every 5 seconds and update their tables in place, without reloading (ticked checkboxes on the user page are kept).
@@ -61,6 +103,6 @@ Either way, the file is the source of truth:
 
 ## Not done yet
 
-- Access control: both pages are currently open to anyone who can reach the site. Login and admin/user roles come next. Until then, keep the site on this computer only: the admin page can link to (and so read and download) any `.xlsx` file on it.
+- Access control: there is a single admin account (see *Configuration*); no separate roles or per-person logins yet.
 - Double confirmation of email/phone.
 - The emails spreadsheet is stored and shown on the admin page but not used for anything else yet.

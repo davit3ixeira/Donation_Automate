@@ -3,6 +3,9 @@ obj/
 .vs/
 *.user
 
+# Admin login and SMTP credentials for this machine - never commit them.
+appsettings.Local.json
+
 # Uploaded spreadsheets contain personal data about children - never commit them.
 data/
 # Spreadsheets with children's data (e.g. sample files dropped in the project root).

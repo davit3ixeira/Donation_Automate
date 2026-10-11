@@ -8,7 +8,7 @@
     <div>
         <p class="eyebrow">Área da equipe</p>
         <h1>Entrar</h1>
-        <p class="muted">Informe o login e a senha para acessar a administração e os e-mails.</p>
+        <p class="muted">Informe o e-mail e a senha para acessar a administração e os e-mails.</p>
     </div>
 </div>
 
@@ -18,7 +18,7 @@
             <div asp-validation-summary="ModelOnly" class="field-error"></div>
             <div class="field">
                 <label asp-for="Usuario"></label>
-                <input asp-for="Usuario" required autocomplete="username" autofocus>
+                <input asp-for="Usuario" type="email" required autocomplete="username" autofocus>
                 <span asp-validation-for="Usuario" class="field-error"></span>
             </div>
             <div class="field">

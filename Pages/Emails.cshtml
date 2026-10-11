@@ -20,8 +20,8 @@
 {
     <div class="notice">
         <strong>Modo de teste:</strong> nenhum e-mail é enviado de verdade. As mensagens são salvas como arquivos <code>.eml</code>
-        em <code>data\outbox</code> (abrem no Outlook ou no Bloco de Notas). Para enviar de verdade, preencha a
-        <a href="#configuracao">configuração de envio</a>.
+        em <code>data\outbox</code> (abrem no Outlook ou no Bloco de Notas). Para enviar de verdade, o servidor de e-mail
+        precisa ser configurado nas configurações do sistema (veja o README).
     </div>
 }
 
@@ -101,7 +101,7 @@
         </div>
         @if (Model.Donors.Count == 0)
         {
-            <p class="empty">Nenhum doador ainda. Vincule ou envie a planilha de doadores acima. Quem pedir crianças pelo site entra na lista automaticamente.</p>
+            <p class="empty">Nenhum doador ainda. Envie a planilha de doadores acima. Quem pedir crianças pelo site entra na lista automaticamente.</p>
         }
         else
         {
@@ -207,58 +207,6 @@
             <button class="btn btn-primary">Salvar modelos</button>
         </div>
     </form>
-</section>
-
-@* ---------------------------------------------------------------- SMTP *@
-<section id="configuracao">
-    <div class="section-head">
-        <h2>Configuração de envio</h2>
-        <span class="pill @(testMode ? "pill-pending" : "pill-approved")">@(testMode ? "Modo de teste" : $"Enviando por {Model.Settings.Smtp.Host}")</span>
-    </div>
-    <div class="card">
-        <form method="post" asp-page-handler="Server" class="server-form">
-            <div class="field">
-                <label for="host">Servidor SMTP</label>
-                <input id="host" name="host" value="@Model.Settings.Smtp.Host" placeholder="smtp.gmail.com">
-            </div>
-            <div class="field small">
-                <label for="port">Porta</label>
-                <input id="port" name="port" type="number" value="@Model.Settings.Smtp.Port" min="1" max="65535">
-            </div>
-            <div class="field">
-                <label for="user">Usuário</label>
-                <input id="user" name="user" value="@Model.Settings.Smtp.User" placeholder="suaong@gmail.com" autocomplete="off">
-            </div>
-            <div class="field">
-                <label for="password">Senha</label>
-                <input id="password" name="password" type="password" autocomplete="new-password"
-                       placeholder="@(Model.HasPassword ? "•••••••• (salva; deixe vazio para manter)" : "")">
-                @if (Model.HasPassword)
-                {
-                    <label class="checkbox"><input type="checkbox" name="clearPassword" value="true"> Apagar a senha salva</label>
-                }
-            </div>
-            <div class="field">
-                <label for="fromName">Nome do remetente</label>
-                <input id="fromName" name="fromName" value="@Model.Settings.Smtp.FromName" placeholder="Creche Mundo Infantil">
-            </div>
-            <div class="field">
-                <label for="fromAddress">E-mail do remetente</label>
-                <input id="fromAddress" name="fromAddress" type="email" value="@Model.Settings.Smtp.FromAddress" placeholder="suaong@gmail.com">
-            </div>
-            <div class="field wide">
-                <label for="siteUrl">Endereço do site (usado no <code>{link}</code>)</label>
-                <input id="siteUrl" name="siteUrl" value="@Model.Settings.SiteUrl" placeholder="@Model.Link">
-            </div>
-            <div class="form-footer wide">
-                <button class="btn btn-primary">Salvar configuração</button>
-                @if (!testMode)
-                {
-                    <button class="btn" formaction="?handler=SendTest" formnovalidate>Enviar e-mail de teste para o remetente</button>
-                }
-            </div>
-        </form>
-    </div>
 </section>
 
 @section Scripts {
