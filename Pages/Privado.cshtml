@@ -1,0 +1,21 @@
+@page
+@inject IConfiguration Config
+@{
+    ViewData["Title"] = "Acesso pelo link";
+    var contact = Config["Smtp:FromAddress"];
+}
+
+<div class="page-head">
+    <div>
+        <p class="eyebrow">Natal Solidário</p>
+        <h1>Acesse pelo link do convite</h1>
+        <p class="muted">
+            Este site é aberto pelo link enviado por e-mail aos padrinhos e madrinhas.
+            Se você recebeu o convite, abra o link do e-mail (ou o link que alguém repassou para você).
+        </p>
+        @if (!string.IsNullOrWhiteSpace(contact))
+        {
+            <p class="muted">Quer ajudar e não recebeu o link? Escreva para <a href="mailto:@contact">@contact</a>.</p>
+        }
+    </div>
+</div>

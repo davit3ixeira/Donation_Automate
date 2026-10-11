@@ -8,27 +8,57 @@
     <div>
         <p class="eyebrow">Área da equipe</p>
         <h1>Entrar</h1>
-        <p class="muted">Informe o e-mail e a senha para acessar a administração e os e-mails.</p>
+        @if (Model.Ticket is null)
+        {
+            <p class="muted">Informe o e-mail e a senha para acessar a administração e os e-mails.</p>
+        }
+        else
+        {
+            <p class="muted">Enviamos um código de 6 dígitos para <strong>@Model.SentTo</strong>. Ele vale por 10 minutos.</p>
+        }
     </div>
 </div>
 
 <section class="cards">
     <div class="card">
-        <form method="post" asp-route-returnUrl="@Model.ReturnUrl">
-            <div asp-validation-summary="ModelOnly" class="field-error"></div>
-            <div class="field">
-                <label asp-for="Usuario"></label>
-                <input asp-for="Usuario" type="email" required autocomplete="username" autofocus>
-                <span asp-validation-for="Usuario" class="field-error"></span>
-            </div>
-            <div class="field">
-                <label asp-for="Senha"></label>
-                <input asp-for="Senha" type="password" required autocomplete="current-password">
-                <span asp-validation-for="Senha" class="field-error"></span>
-            </div>
-            <div class="actions">
-                <button type="submit" class="btn btn-primary">Entrar</button>
-            </div>
-        </form>
+        @if (Model.Ticket is null)
+        {
+            <form method="post" asp-route-returnUrl="@Model.ReturnUrl">
+                <div asp-validation-summary="ModelOnly" class="field-error"></div>
+                <div class="field">
+                    <label asp-for="Usuario"></label>
+                    <input asp-for="Usuario" type="email" required autocomplete="username" autofocus>
+                    <span asp-validation-for="Usuario" class="field-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="Senha"></label>
+                    <input asp-for="Senha" type="password" required autocomplete="current-password">
+                    <span asp-validation-for="Senha" class="field-error"></span>
+                </div>
+                <div class="actions">
+                    <button type="submit" class="btn btn-primary">Entrar</button>
+                </div>
+            </form>
+        }
+        else
+        {
+            <form method="post" asp-page-handler="Code" asp-route-returnUrl="@Model.ReturnUrl">
+                <div asp-validation-summary="ModelOnly" class="field-error"></div>
+                <input type="hidden" name="ticket" value="@Model.Ticket">
+                <div class="field">
+                    <label for="code">Código</label>
+                    <input id="code" name="code" required inputmode="numeric" autocomplete="one-time-code"
+                           pattern="[0-9 ]{6,7}" maxlength="7" placeholder="000000" autofocus>
+                </div>
+                @if (Model.CodeInOutbox)
+                {
+                    <p class="hint muted">Modo de teste: o e-mail com o código foi salvo em <code>data\outbox</code>.</p>
+                }
+                <div class="actions">
+                    <button type="submit" class="btn btn-primary">Confirmar</button>
+                    <a class="btn" asp-page="/Login" asp-route-returnUrl="@Model.ReturnUrl">Voltar</a>
+                </div>
+            </form>
+        }
     </div>
 </section>

@@ -15,7 +15,9 @@ Then open http://localhost:5080.
 - `/Admin` — upload the children and emails spreadsheets, see every row, change statuses (e.g. pendente → aprovado), and download the current spreadsheet.
 - `/Emails` — donors list, email templates and sending.
 
-`/Admin` and `/Emails` require the admin login (see below).
+`/Admin` and `/Emails` require the admin login (see below): email and password, then a 6-digit code emailed to `Admin:Email` (valid 10 minutes, 5 tries). The login is then remembered in that browser for 14 days. Without an email server (test mode), the code email is saved in `data/outbox`.
+
+The donor site is private when `SiteAccessKey` is set: it only opens through the link with the key (`https://doe-natal.com.br/?acesso=<key>`), which is what `{link}` in the emails contains and what `/Emails` shows for sharing. The browser remembers the key, so later visits work without it. Anyone else gets a page asking for the link. To cut off an old link, change the key (everyone then needs the new link). Search engines are told not to index the site.
 
 ## Configuration: login, email server and passwords
 
@@ -25,6 +27,7 @@ These settings are internal: they are not editable in the site, and they are nev
 |---|---|---|
 | `Admin:Email` | Admin login (an email address) | Yes. Without it nobody can log in. |
 | `Admin:Password` | Admin password | Yes |
+| `Admin:LoginCode` | `false` turns off the emailed login code (e.g. if email sending is broken) | No (default `true`) |
 | `Smtp:Host` | SMTP server (Amazon SES São Paulo: `email-smtp.sa-east-1.amazonaws.com`) | To send* |
 | `Smtp:Port` | SMTP port (`587`; `465` also works) | No (default `587`) |
 | `Smtp:User` | SMTP username (Amazon SES: *Nome de usuário SMTP*, starts with `AKIA`) | To send |
@@ -33,6 +36,7 @@ These settings are internal: they are not editable in the site, and they are nev
 | `Smtp:FromAddress` | Sender address. Must be on a domain verified in SES (`@doe-natal.com.br`) | To send* |
 | `Smtp:ReplyTo` | Where replies go. Keep it the same as the ImprovMX alias below | Recommended |
 | `SiteUrl` | Site address used in `{link}` in emails, e.g. `https://doe-natal.com.br/`. Empty: the address the admin is browsing | On the server |
+| `SiteAccessKey` | Key in the donor link (letters and digits, e.g. 16 random characters). Empty: the site is open to anyone | Recommended |
 
 \* Without `Smtp:Host` and `Smtp:FromAddress`, the app is in **test mode**: nothing is sent, emails are saved as `.eml` files in `data/outbox`.
 
@@ -55,6 +59,7 @@ Smtp__FromName=Natal Solidário · Creche Mundo Infantil
 Smtp__FromAddress=natal-creche@doe-natal.com.br
 Smtp__ReplyTo=...
 SiteUrl=https://doe-natal.com.br/
+SiteAccessKey=...
 ```
 
 Ask the project owner for the actual values; never commit them or paste them in issues or chats.
@@ -100,6 +105,16 @@ The stored file is the source of truth:
 - Every page load reads the file, and every change is written straight back into it.
 - Open pages check for changes every 5 seconds and update their tables in place, without reloading (ticked checkboxes on the user page are kept).
 - While the spreadsheet is open in Excel, the site can still read it but cannot save, and shows a message asking to close it.
+
+## Production
+
+The site runs at https://doe-natal.com.br on an Amazon Lightsail server (São Paulo, Ubuntu 24.04, static IP `54.94.141.39`; DNS at Registro.br).
+
+- **Deploy**: every push to `main` runs `.github/workflows/deploy.yml`, which builds the app (self-contained, linux-x64) and sends it to the server, where `/usr/local/bin/doe-natal-deploy` swaps it in and restarts the service. If the new version doesn't start, the server goes back to the previous one and the run fails. It can also be started by hand in GitHub → *Actions* → *Deploy* → *Run workflow*.
+- **GitHub secret** `DEPLOY_SSH_KEY`: private key whose public half is in the server's `~ubuntu/.ssh/authorized_keys`, restricted to running the deploy script only. If it leaks, remove that line on the server and create a new pair.
+- **On the server**: the app is in `/opt/doe-natal/app` (the previous build in `app.old`), runs as the `doe-natal` systemd service (user `doenatal`, `127.0.0.1:5000`), and Caddy (`/etc/caddy/Caddyfile`) serves it over HTTPS with an automatic Let's Encrypt certificate. Data (spreadsheets, templates) is in `/var/lib/doe-natal/data` and is never touched by a deploy. Settings and passwords are environment variables in `/etc/doe-natal.env` (readable by root only): after changing it, run `sudo systemctl restart doe-natal`.
+- **Admin access to the server**: SSH as `ubuntu` with the Lightsail default key, or *Connect using SSH* in the Lightsail console. Logs: `sudo journalctl -u doe-natal -f`.
+- **AWS account**: on the free plan (credits, about 6 months from October 2026). Upgrade it before it expires, or the account is closed and the site and emails stop.
 
 ## Not done yet
 

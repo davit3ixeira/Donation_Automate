@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using DonationAutomate.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,6 +22,8 @@ builder.Services.AddSingleton<SpreadsheetStore>();
 builder.Services.AddSingleton<EmailSettingsStore>();
 builder.Services.AddSingleton<SiteSettingsStore>();
 builder.Services.AddSingleton<MailService>();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<LoginCodes>();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -37,6 +40,13 @@ builder.Services.AddDataProtection().SetApplicationName("DonationAutomate");
 
 var app = builder.Build();
 
+// On the server, Caddy terminates HTTPS and passes requests on from the same machine: take the
+// original scheme from it, so cookies are marked secure. Only loopback proxies are trusted.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+});
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
@@ -46,6 +56,7 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
+app.UseSiteAccess();
 app.UseAuthorization();
 app.MapRazorPages();
 

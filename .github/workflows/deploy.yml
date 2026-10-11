@@ -1,0 +1,39 @@
+# Publishes the site to the production server (Lightsail) on every push to main.
+# The server keeps its own data and settings; only the app is replaced. If the new version
+# doesn't start, the server rolls back to the previous one and this run fails.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build
+        run: dotnet publish DonationAutomate.csproj -c Release -r linux-x64 --self-contained true -o publish
+
+      - name: Deploy
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          # The server's host key, so the connection can't be redirected elsewhere.
+          echo "54.94.141.39 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHbuJJgKxBZsR2uJ+ypoYw78xwfqsL88w4Xt39emfLCP" > ~/.ssh/known_hosts
+          # This key can only run the deploy script on the server, which reads the build from stdin.
+          tar -C publish -czf - . | ssh -i ~/.ssh/deploy -o BatchMode=yes ubuntu@54.94.141.39

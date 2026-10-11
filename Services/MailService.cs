@@ -66,7 +66,7 @@ public sealed record SendResult(int Sent, IReadOnlyList<(string Email, string Er
 /// SMTP server. With no server configured, emails are written to data/outbox as .eml files
 /// (they open in Outlook or any mail program), so everything can be tried out safely.
 /// </summary>
-public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore settings, ILogger<MailService> logger)
+public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore settings, IConfiguration config, ILogger<MailService> logger)
 {
     private sealed record Outgoing(string Name, string Email, string Subject, string Body);
 
@@ -146,9 +146,12 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
         })
         .ToList();
 
-    /// <summary>The address used for {link}: the configured one, or the one the admin is browsing.</summary>
+    /// <summary>
+    /// The address used for {link}: the configured one, or the one the admin is browsing, with the
+    /// access key that lets donors into the private site.
+    /// </summary>
     public string SiteUrl(HttpRequest request) =>
-        settings.Get().SiteUrl ?? $"{request.Scheme}://{request.Host}{request.PathBase}/";
+        SiteAccess.Link(settings.Get().SiteUrl ?? $"{request.Scheme}://{request.Host}{request.PathBase}/", config);
 
     public static Dictionary<string, string> CampaignValues(CampaignStats stats, string name, string link) => new()
     {
@@ -246,6 +249,15 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
         var messages = addresses.Select(a => new Outgoing(name, a, subject, body)).ToList();
         return await SendAndRecordAsync(messages, $"Aprovação: {values["crianca"]}");
     }
+
+    /// <summary>The code for logging in to the staff area. Not recorded in the donors sheet.</summary>
+    public Task<SendResult> SendLoginCodeAsync(string to, string code) =>
+        SendAsync([new Outgoing("", to, $"Código de acesso: {code}",
+            $"""
+            Seu código para entrar na área da equipe é {code}.
+
+            Ele vale por {LoginCodes.Lifetime.TotalMinutes:0} minutos. Se não foi você que tentou entrar, ignore esta mensagem e troque a senha do admin.
+            """)]);
 
     private async Task<SendResult> SendAndRecordAsync(IReadOnlyList<Outgoing> messages, string label)
     {

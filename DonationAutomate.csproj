@@ -12,4 +12,15 @@
     <PackageReference Include="MailKit" Version="4.18.1" />
   </ItemGroup>
 
+  <!-- Local passwords stay on the development machine; the server uses environment variables. -->
+  <ItemGroup>
+    <Content Update="appsettings.Local.json;appsettings.Local.example.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
+  <!-- Runtime data (spreadsheets, templates, settings) is not part of the app: never build or publish it. -->
+  <ItemGroup>
+    <Content Remove="data\**" />
+    <None Remove="data\**" />
+  </ItemGroup>
+
 </Project>
