@@ -7,6 +7,15 @@
     <RootNamespace>DonationAutomate</RootNamespace>
   </PropertyGroup>
 
+  <!--
+    On Windows, Smart App Control blocks the unsigned DonationAutomate.exe that a build creates, so
+    `dotnet run` starts the app through dotnet.exe instead. Publishing for the server (-r linux-x64)
+    still produces its executable.
+  -->
+  <PropertyGroup Condition="'$(OS)' == 'Windows_NT' And '$(RuntimeIdentifier)' == ''">
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.1" />
     <PackageReference Include="MailKit" Version="4.18.1" />
