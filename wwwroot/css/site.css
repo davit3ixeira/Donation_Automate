@@ -1004,7 +1004,16 @@ dialog.viewer::backdrop { background: rgba(3, 10, 7, 0.9); }
 }
 .pix-alt { margin-top: 8px; font-size: 0.85rem; }
 .pix-alt summary { cursor: pointer; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; margin-bottom: 8px; }
-.confirm-children { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 6px; font-weight: 700; }
+/* Confirmation page: one card per child with everything to check */
+.confirm-section { display: grid; gap: 16px; margin-bottom: 32px; }
+.confirm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.confirm-child header { margin-bottom: 10px; }
+.confirm-child h2 { font-size: 1.15rem; margin: 2px 0 0; }
+.confirm-number { font-size: 0.78rem; font-weight: 800; color: var(--gold-bright); letter-spacing: 0.04em; }
+.confirm-child dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 0.92rem; }
+.confirm-child dt { color: var(--muted); font-weight: 700; }
+.confirm-child dd { margin: 0; color: var(--cream); font-weight: 700; }
+.confirm-actions p { margin-top: 0; }
 
 /* ----------------------------------------------------------------- Confetti */
 .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }

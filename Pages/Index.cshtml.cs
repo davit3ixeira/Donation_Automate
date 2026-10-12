@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace DonationAutomate.Pages;
 
-public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, MailService mail, IWebHostEnvironment env, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, MailService mail, RequestFlow flow, IWebHostEnvironment env, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>One child as shown on a card, already formatted for reading.</summary>
     public sealed record ChildCard(
@@ -86,7 +86,7 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
                 TempData["ThanksName"] = FirstWord(Pretty(Name));
                 TempData["ThanksCount"] = result.Requested.ToString();
                 AddToDonorList(Name.Trim(), Email.Trim());
-                await SendReceivedAsync(new DonorChildren(Name.Trim(), Email.Trim(), result.Children));
+                await SendConfirmationAsync(result.Children[0].Values[ChildColumns.Id].Trim());
             }
             if (result.Unavailable > 0)
                 TempData["Error"] = result.Unavailable == 1
@@ -102,20 +102,20 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
     }
 
     /// <summary>
-    /// "Pedido recebido" to the donor. The request is saved by now and the team sees it in the
-    /// admin either way, so a failure here is only logged.
+    /// "Confirme sua escolha", with the link, to the donor of this child (covering all their
+    /// pending children), and a copy to the team. The request is saved by now, and if the email
+    /// fails the admin page offers to send it again, so a failure here is only logged.
     /// </summary>
-    private async Task SendReceivedAsync(DonorChildren donor)
+    private async Task SendConfirmationAsync(string childId)
     {
         try
         {
-            var sent = await mail.SendRequestReceivedAsync(donor);
-            if (sent is { Failed.Count: > 0 })
-                logger.LogWarning("Request email not sent: {Summary}", sent.Summary("Pedido recebido"));
+            var result = await flow.SendConfirmationAsync(childId, mail.SiteUrlWithoutKey(Request));
+            if (result.Warning is not null) logger.LogWarning("{Warning}", result.Warning);
         }
-        catch (EmailException ex)
+        catch (Exception ex) when (ex is EmailException or SpreadsheetException)
         {
-            logger.LogWarning("Request email not sent to {Email}: {Error}", donor.Email, ex.Message);
+            logger.LogWarning("Confirmation email not sent for child {Id}: {Error}", childId, ex.Message);
         }
     }
 

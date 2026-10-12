@@ -1,8 +1,10 @@
 @page
 @model ConfirmarModel
+@inject IConfiguration Config
 @{
     ViewData["Title"] = "Confirmar apadrinhamento";
     var greeting = Model.DonorName != "" ? $"{Model.DonorName.Split(' ')[0]}, " : "";
+    var contact = Config["Smtp:FromAddress"];
 }
 
 <div class="page-head">
@@ -34,29 +36,58 @@
     </div>
 </div>
 
-@if (Model.ChildNames.Count > 0 && Model.Status is ConfirmarModel.State.Pending or ConfirmarModel.State.Done or ConfirmarModel.State.AlreadyConfirmed)
+@if (Model.Children.Count > 0 && Model.Status is ConfirmarModel.State.Pending or ConfirmarModel.State.Done or ConfirmarModel.State.AlreadyConfirmed)
 {
-    <section class="cards">
-        <div class="card">
-            <ul class="confirm-children">
-                @foreach (var name in Model.ChildNames)
-                {
-                    <li>🎁 @name</li>
-                }
-            </ul>
-            @if (Model.Warning is not null)
+    <section class="confirm-section">
+        <div class="confirm-grid">
+            @foreach (var c in Model.Children)
             {
-                <p class="field-error">@Model.Warning</p>
-            }
-            @if (Model.Status == ConfirmarModel.State.Pending)
-            {
-                <form method="post">
-                    <input type="hidden" name="token" value="@Model.Token">
-                    <div class="actions">
-                        <button class="btn btn-primary btn-lg">Confirmar</button>
-                    </div>
-                </form>
+                <article class="card confirm-child">
+                    <header>
+                        <span class="confirm-number">Nº @c.Id</span>
+                        <h2>🎁 @c.Name</h2>
+                    </header>
+                    <dl>
+                        @if (c.Gender != "") { <dt>Gênero</dt><dd>@c.Gender</dd> }
+                        @if (c.Turma != "") { <dt>Turma</dt><dd>@c.Turma</dd> }
+                        @if (c.AgeGroup != "") { <dt>Faixa etária</dt><dd>@c.AgeGroup</dd> }
+                        @if (c.Age != "") { <dt>Idade</dt><dd>@c.Age</dd> }
+                        @if (c.Shoes != "") { <dt>Calçado</dt><dd>@c.Shoes</dd> }
+                        @if (c.Clothes != "") { <dt>Roupa</dt><dd>@c.Clothes</dd> }
+                        @if (c.Donation != "")
+                        {
+                            <dt>Doação</dt>
+                            <dd>@(c.Donation == ChildDonation.Kit ? "Kit (roupa, calçado e brinquedo)" : "Pix")</dd>
+                        }
+                    </dl>
+                </article>
             }
         </div>
+        @if (Model.Warning is not null || Model.Status == ConfirmarModel.State.Pending)
+        {
+            <div class="card confirm-actions">
+                @if (Model.Warning is not null)
+                {
+                    <p class="field-error">@Model.Warning</p>
+                }
+                @if (Model.Status == ConfirmarModel.State.Pending)
+                {
+                    <p class="muted">
+                        Confira os dados de @(Model.Children.Count == 1 ? "da criança" : "cada criança") acima.
+                        Ao confirmar, você recebe por e-mail as instruções de entrega e o prazo.
+                        @if (!string.IsNullOrWhiteSpace(contact))
+                        {
+                            <text>Algo errado? Escreva para <a href="mailto:@contact">@contact</a> antes de confirmar.</text>
+                        }
+                    </p>
+                    <form method="post">
+                        <input type="hidden" name="token" value="@Model.Token">
+                        <div class="actions">
+                            <button class="btn btn-primary btn-lg">Confirmar</button>
+                        </div>
+                    </form>
+                }
+            </div>
+        }
     </section>
 }

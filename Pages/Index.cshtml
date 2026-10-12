@@ -94,13 +94,10 @@
         <div class="thanks-icon">@Icon("gift", 32)</div>
         <h2>Obrigado, @Model.ThanksName! 🎄</h2>
         <p>
-            Seu pedido para @(Model.ThanksCount == 1 ? "1 criança" : $"{Model.ThanksCount} crianças") foi recebido
-            e está aguardando a confirmação da equipe.
+            Recebemos a sua escolha de @(Model.ThanksCount == 1 ? "1 criança" : $"{Model.ThanksCount} crianças").
+            Falta só um passo: <strong>confirmar pelo link que enviamos para o seu e-mail</strong>.
         </p>
-        <p>
-            Enviamos um e-mail com as crianças que você escolheu. Em breve chega outro, com um link para confirmar
-            a sua escolha e os próximos passos. Se não encontrar, confira a caixa de spam ou de promoções.
-        </p>
+        <p>Se o e-mail não aparecer em alguns minutos, confira a caixa de spam ou de promoções.</p>
         <a href="#criancas" class="btn">@Icon("plus", 18) Escolher mais uma criança</a>
     </section>
 }

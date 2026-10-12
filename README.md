@@ -81,7 +81,7 @@ Sheets in older layouts still work, brought up to date when read (the file chang
 - Status values are written capitalised (`Disponível`, `Pendente`, `Aprovado`).
 - Pictures that share an internal id (Google Sheets exports do this) are renumbered automatically when the file is read.
 - The user page shows only the first 8 columns (id to roupa).
-- When a user sends children (giving name, email and kit or Pix), they become `pendente`, the three donor columns are filled in, and the donor gets the **Pedido recebido** email. See *Request flow* below.
+- When a user sends children (giving name, email and kit or Pix), they become `pendente`, the three donor columns are filled in, and the donor gets the **Confirme sua escolha** email. See *Request flow* below.
 - Setting a child back to `disponível` clears the donor columns and the request's `doação` and `confirmação enviada`.
 - The system appends these columns after the expected ones the first time it needs them (found by name): `realizado` (`Sim` once the kit or Pix was received; only for approved children; sheets with the old name `kit entregue` are renamed), `doação` (`Kit` or `Pix`) and `confirmação enviada` (when the confirmation link was emailed).
 - On the admin page every cell can be edited in place (Enter saves, Esc cancels), and children can be added or deleted. Each change is written to the spreadsheet immediately. The table starts with **Realizado** (a switch, for approved children) and **Doação** (Kit or Pix, for children with a donor), and can be filtered by status, donation and realizado; filtering or using a row button keeps the page where it was. **Exportar planilha** downloads the whole sheet.
@@ -97,12 +97,12 @@ The donors spreadsheet has `nome, email` side by side (by position, header names
 - **Enviar para todos**: pick one of three templates (Convite, Progresso, Agradecimento final) and an audience (everyone, those who haven't donated, those who have). A preview shows the text with real numbers.
 - **✉** next to a donor: a free-text email to that person only.
 - **Request flow**, always per donor (one email and one link cover all of a donor's pending children):
-  1. The donor chooses children on the site, picking **kit** (highlighted, recommended) or **Pix** (behind "Não consegue comprar o kit?"); the page shows the average kit value. The donor gets **Pedido recebido**.
-  2. In the admin, a pending child shows **Enviar e-mail de confirmação**: the donor gets **Confirme sua escolha**, with a link. The button then becomes **Confirmar** (plus *reenviar e-mail*).
-  3. The link opens `/Confirmar`, which lists the children and only confirms on its button (corporate email filters open links by themselves). Confirming, or the admin's **Confirmar**, approves the donor's pending children and emails **Instruções de entrega**: the kit delivery address and/or the Pix key, and the deadline, from the campaign settings. When the donor confirmed, the team (`Admin:Email`) is told too.
+  1. The donor chooses children on the site, picking **kit** (highlighted, recommended) or **Pix** (behind "Não consegue comprar o kit?"); the page shows the average kit value. Right away the donor gets **Confirme sua escolha**, with the link to confirm, and the team (`Admin:Email`) gets a copy.
+  2. The link opens `/Confirmar`, which shows every detail of each child (gender, class, age, sizes, donation) and only confirms on its button (corporate email filters open links by themselves). Confirming approves the donor's pending children, emails them **Instruções de entrega** (the kit delivery address and/or the Pix key, the deadline, and the campaign address for anything unexpected) and tells the team.
+  3. In the admin, a pending child shows **Confirmar** (to confirm for the donor, e.g. after a phone call; same instructions email, no team notice) and *reenviar e-mail*. If the automatic email failed, it shows **Enviar e-mail de confirmação** instead.
   - Approving one child from the status list also emails that child's instructions. Status changes made directly in the Excel file send nothing.
 - **Campaign settings** (admin page): the calendar dates (the kit deadline is also the Pix deadline in the emails), the average kit value (shown to donors, default R$ 300), the delivery address and the Pix key. Kept in `data/site.json`, not in Git, since the address and key are personal data.
-- All six templates are editable on the page. Placeholders such as `{nome}`, `{link}`, `{percentual_disponivel}`, `{criancas}`, `{instrucoes}` or `{link_confirmar}` are filled in per recipient.
+- All five templates are editable on the page. Placeholders such as `{nome}`, `{link}`, `{percentual_disponivel}`, `{criancas}`, `{instrucoes}`, `{link_confirmar}` or `{contato}` are filled in per recipient.
 - Templates are saved in `data/email.json`. The email server, sender and reply-to address are not on the page: see *Configuration*.
 - **Test mode**: until an SMTP server and sender are configured, nothing is sent. Emails are saved as `.eml` files in `data/outbox` instead.
 

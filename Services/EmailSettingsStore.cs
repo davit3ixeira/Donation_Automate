@@ -7,28 +7,26 @@ public sealed record EmailTemplate(string Subject, string Body);
 
 /// <summary>
 /// The editable email templates. Campaign ones go to the whole donor list; the others go to one
-/// donor along a request: Received when they choose, Confirmation when the admin sends the
-/// confirmation link, Approval once the choice is confirmed.
+/// donor along a request: Confirmation as soon as they choose (with the link to confirm, and a
+/// copy to the team), Approval once the choice is confirmed.
 /// </summary>
 public static class TemplateKeys
 {
     public const string Invite = "convite";
     public const string Progress = "progresso";
     public const string Final = "final";
-    public const string Received = "pedido";
     public const string Confirmation = "confirmacao";
     public const string Approval = "aprovacao";
 
     public static readonly IReadOnlyList<string> Campaign = [Invite, Progress, Final];
-    public static readonly IReadOnlyList<string> Donor = [Received, Confirmation, Approval];
-    public static readonly IReadOnlyList<string> All = [Invite, Progress, Final, Received, Confirmation, Approval];
+    public static readonly IReadOnlyList<string> Donor = [Confirmation, Approval];
+    public static readonly IReadOnlyList<string> All = [Invite, Progress, Final, Confirmation, Approval];
 
     public static string Label(string key) => key switch
     {
         Invite => "Convite",
         Progress => "Progresso",
         Final => "Agradecimento final",
-        Received => "Pedido recebido",
         Confirmation => "Confirme sua escolha",
         Approval => "Instruções de entrega",
         _ => key,
@@ -39,8 +37,7 @@ public static class TemplateKeys
         Invite => "No início da campanha, convidando a apadrinhar.",
         Progress => "No meio da campanha, com quantas crianças ainda estão disponíveis.",
         Final => "No fim da campanha, agradecendo a todos.",
-        Received => "Enviado automaticamente ao padrinho assim que ele escolhe as crianças no site.",
-        Confirmation => "Enviado pelo botão \"Enviar e-mail de confirmação\" do admin, com o link para o padrinho confirmar.",
+        Confirmation => "Enviado assim que o padrinho escolhe as crianças no site, com o link para ele confirmar. A equipe recebe uma cópia.",
         Approval => "Enviado quando o padrinho confirma pelo link (ou o admin confirma): como e até quando entregar o kit ou fazer o Pix.",
         _ => "",
     };
@@ -48,21 +45,17 @@ public static class TemplateKeys
     /// <summary>Placeholders the admin can use, with what they turn into.</summary>
     public static IReadOnlyList<(string Name, string Meaning)> Placeholders(string key) => key switch
     {
-        Received =>
-        [
-            ("{nome}", "nome do padrinho"), ("{criancas}", "lista das crianças escolhidas"),
-            ("{quantidade}", "quantas crianças"), ("{doacao}", "kit ou Pix"), ("{prazo}", "data limite de entrega"),
-        ],
         Confirmation =>
         [
             ("{nome}", "nome do padrinho"), ("{criancas}", "lista das crianças"), ("{quantidade}", "quantas crianças"),
             ("{doacao}", "kit ou Pix"), ("{prazo}", "data limite de entrega"), ("{link_confirmar}", "link para confirmar"),
+            ("{contato}", "e-mail da campanha"),
         ],
         Approval =>
         [
             ("{nome}", "nome do padrinho"), ("{criancas}", "lista das crianças"), ("{quantidade}", "quantas crianças"),
             ("{doacao}", "kit ou Pix"), ("{prazo}", "data limite de entrega"),
-            ("{instrucoes}", "como entregar: endereço do kit e/ou chave Pix"),
+            ("{instrucoes}", "como entregar: endereço do kit e/ou chave Pix"), ("{contato}", "e-mail da campanha"),
         ],
         _ =>
         [
@@ -106,34 +99,21 @@ public static class TemplateKeys
 
             Muito obrigado, e boas festas!
             """),
-        [Received] = new(
-            "Recebemos sua escolha no Natal Solidário",
+        [Confirmation] = new(
+            "Confirme sua escolha no Natal Solidário",
             """
             Olá, {nome}!
 
-            Recebemos o seu pedido para apadrinhar:
+            Que alegria ter você no nosso Natal! Estas são as crianças que você escolheu:
 
             {criancas}
 
             Forma de doação: {doacao}.
 
-            A nossa equipe vai conferir e, em breve, você recebe outro e-mail com um link para confirmar a sua escolha e saber os próximos passos. Se ele não aparecer, dê uma olhada na caixa de spam ou de promoções.
-
-            Muito obrigado por fazer parte do nosso Natal!
-            """),
-        [Confirmation] = new(
-            "Pedido aprovado: confirme sua escolha",
-            """
-            Olá, {nome}!
-
-            O seu pedido foi aprovado! Estas são as crianças que você vai apadrinhar:
-
-            {criancas}
-
-            Para confirmar, abra o link abaixo e clique em "Confirmar":
+            Para confirmar, abra o link abaixo, confira os detalhes de cada criança e clique em "Confirmar":
             {link_confirmar}
 
-            Assim que você confirmar, enviamos as instruções de entrega ({doacao}), que deve ser feita até {prazo}.
+            Assim que você confirmar, enviamos as instruções de entrega, que deve ser feita até {prazo}.
 
             Muito obrigado!
             """),
@@ -148,7 +128,7 @@ public static class TemplateKeys
 
             {instrucoes}
 
-            Qualquer dúvida, é só responder este e-mail.
+            Se tiver algum imprevisto, escreva para {contato}.
 
             Com carinho,
             """),

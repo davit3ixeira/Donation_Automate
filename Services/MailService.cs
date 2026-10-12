@@ -172,8 +172,10 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
     private static readonly CultureInfo PtBr = new("pt-BR");
 
     /// <summary>The values for a donor template (<see cref="TemplateKeys.Donor"/>).</summary>
-    public static Dictionary<string, string> DonorValues(DonorChildren donor, SiteSettings site, string confirmLink = "") => new()
+    /// <param name="contact">The campaign's address, for "write to us if something comes up".</param>
+    public static Dictionary<string, string> DonorValues(DonorChildren donor, SiteSettings site, string contact, string confirmLink = "") => new()
     {
+        ["contato"] = contact,
         ["nome"] = Greeting(donor.Name),
         ["criancas"] = ChildrenText(donor.Children),
         ["quantidade"] = donor.Children.Count == 1 ? "1 criança" : $"{donor.Children.Count} crianças",
@@ -297,31 +299,54 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
         return SendAndRecordAsync(messages, "Mensagem individual");
     }
 
-    /// <summary>"Pedido recebido", right after the donor chooses on the site. Null if the donor's email isn't valid.</summary>
-    public Task<SendResult?> SendRequestReceivedAsync(DonorChildren donor) =>
-        SendToDonorAsync(donor, TemplateKeys.Received, "Pedido recebido");
+    /// <summary>
+    /// "Confirme sua escolha", with the link the donor opens to confirm, sent as soon as they choose.
+    /// The team (Admin:Email) gets a copy. Null if the donor's email isn't valid.
+    /// </summary>
+    public async Task<SendResult?> SendConfirmationRequestAsync(DonorChildren donor, string confirmLink)
+    {
+        if (Compose(donor, TemplateKeys.Confirmation, confirmLink) is not { } composed) return null;
+        var (subject, body, addresses) = composed;
+        var result = await SendAndRecordAsync(
+            addresses.Select(a => new Outgoing(donor.Name, a, subject, body)).ToList(), $"Confirmação enviada: {Names(donor)}");
 
-    /// <summary>"Confirme sua escolha", with the link the donor opens to confirm. Null if the donor's email isn't valid.</summary>
-    public Task<SendResult?> SendConfirmationRequestAsync(DonorChildren donor, string confirmLink) =>
-        SendToDonorAsync(donor, TemplateKeys.Confirmation, "Confirmação enviada", confirmLink);
+        if (config["Admin:Email"]?.Trim() is { Length: > 0 } team)
+        {
+            try
+            {
+                await SendAsync([new Outgoing("", team, $"[Cópia] {subject}",
+                    $"Cópia do e-mail enviado para {donor.Name} <{donor.Email}>{(result.Sent == 0 ? " (o envio para o padrinho FALHOU)" : "")}:\n\n{body}")]);
+            }
+            catch (EmailException ex)
+            {
+                logger.LogWarning("Copy of the confirmation email not sent to the team: {Error}", ex.Message);
+            }
+        }
+        return result;
+    }
 
     /// <summary>The delivery instructions, once the choice is confirmed. Null if the donor's email isn't valid.</summary>
-    public Task<SendResult?> SendApprovalAsync(DonorChildren donor) =>
-        SendToDonorAsync(donor, TemplateKeys.Approval, "Instruções de entrega");
+    public async Task<SendResult?> SendApprovalAsync(DonorChildren donor)
+    {
+        if (Compose(donor, TemplateKeys.Approval) is not { } composed) return null;
+        var (subject, body, addresses) = composed;
+        return await SendAndRecordAsync(
+            addresses.Select(a => new Outgoing(donor.Name, a, subject, body)).ToList(), $"Instruções de entrega: {Names(donor)}");
+    }
 
-    private async Task<SendResult?> SendToDonorAsync(DonorChildren donor, string templateKey, string label, string confirmLink = "")
+    /// <summary>A donor template filled in for this donor, with their valid addresses; null if there are none.</summary>
+    private (string Subject, string Body, List<string> Addresses)? Compose(DonorChildren donor, string templateKey, string confirmLink = "")
     {
         var addresses = Addresses(donor.Email);
         if (addresses.Count == 0 || donor.Children.Count == 0) return null;
 
-        var values = DonorValues(donor, site.Get(), confirmLink);
-        var template = settings.Get().Template(templateKey);
-        var subject = Fill(template.Subject, values);
-        var body = Fill(template.Body, values);
-        var messages = addresses.Select(a => new Outgoing(donor.Name, a, subject, body)).ToList();
-        var children = string.Join(", ", donor.Children.Select(c => c.Values[ChildColumns.Nome].Trim()));
-        return await SendAndRecordAsync(messages, $"{label}: {children}");
+        var s = settings.Get();
+        var values = DonorValues(donor, site.Get(), s.Smtp.FromAddress ?? "", confirmLink);
+        var template = s.Template(templateKey);
+        return (Fill(template.Subject, values), Fill(template.Body, values), addresses);
     }
+
+    private static string Names(DonorChildren donor) => string.Join(", ", donor.Children.Select(c => c.Values[ChildColumns.Nome].Trim()));
 
     /// <summary>Tells the team (Admin:Email) that a donor confirmed through the link. Not recorded in the donors sheet.</summary>
     public Task<SendResult> SendDonorConfirmedNoticeAsync(DonorChildren donor)
