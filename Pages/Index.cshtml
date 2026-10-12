@@ -266,6 +266,14 @@
             @Icon("search", 18)
             <input type="search" id="search" placeholder="Buscar pelo nome…" autocomplete="off">
         </label>
+        @if (Model.Boys > 0 && Model.Girls > 0)
+        {
+            <div class="turma-chips" role="group" aria-label="Filtrar por gênero">
+                <button type="button" class="turma-chip" data-gender="" aria-pressed="true">Todos</button>
+                <button type="button" class="turma-chip" data-gender="@ChildGender.Male" aria-pressed="false">Meninos <span class="count">@Model.Boys</span></button>
+                <button type="button" class="turma-chip" data-gender="@ChildGender.Female" aria-pressed="false">Meninas <span class="count">@Model.Girls</span></button>
+            </div>
+        }
         @if (Model.Turmas.Count > 1)
         {
             <div class="turma-chips" role="group" aria-label="Filtrar por turma">
@@ -302,9 +310,9 @@
                 @for (var i = 0; i < Model.Children.Count; i++)
                 {
                     var c = Model.Children[i];
-                    var meta = string.Join(" · ", new[] { c.Age != "" ? c.Age : c.AgeGroup, c.Turma }.Where(s => s != ""));
+                    var meta = string.Join(" · ", new[] { ChildGender.Label(c.Gender), c.Age != "" ? c.Age : c.AgeGroup, c.Turma }.Where(s => s != ""));
                     <label class="child-card" style="--i: @(i % 24)"
-                           data-turma="@c.Turma" data-search="@c.Search" data-first="@c.FirstName" data-name="@c.Name"
+                           data-turma="@c.Turma" data-gender="@c.Gender" data-search="@c.Search" data-first="@c.FirstName" data-name="@c.Name"
                            data-initials="@c.Initials" data-color="@c.Color">
                         <input type="checkbox" name="Selected" value="@c.Id" class="visually-hidden"
                                checked="@Model.Selected.Contains(c.Id)" aria-label="Escolher @c.Name">
@@ -331,7 +339,7 @@
                             </span>
                         }
                         <span class="pick" aria-hidden="true">
-                            <span class="when-unchecked">@Icon("santa", 18) Adicionar à sacola</span>
+                            <span class="when-unchecked">@Icon("santa", 18) Escolher</span>
                             <span class="when-checked">@Icon("check", 16) Na sacola do Papai Noel</span>
                         </span>
                     </label>
@@ -415,6 +423,7 @@
             const search = document.getElementById('search');
             const fold = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
             let turma = '';
+            let gender = '';
 
             // Cards live inside #live-list, which is replaced on refresh: always look them up fresh.
             const boxes = () => [...form.querySelectorAll('input[name="Selected"]')];
@@ -443,7 +452,8 @@
                 let visible = 0;
                 for (const box of all) {
                     const card = cardOf(box);
-                    const show = (!turma || card.dataset.turma === turma) && (!q || card.dataset.search.includes(q));
+                    const show = (!turma || card.dataset.turma === turma) && (!gender || card.dataset.gender === gender)
+                        && (!q || card.dataset.search.includes(q));
                     card.hidden = !show;
                     if (show) visible++;
                 }
@@ -454,9 +464,15 @@
                     : visible === all.length ? `${all.length} crianças` : `${visible} de ${all.length} crianças`;
             }
 
+            function setGender(value) {
+                gender = value;
+                document.querySelectorAll('.turma-chip[data-gender]').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.gender === value)));
+                applyFilters();
+            }
+
             function setTurma(value) {
                 turma = value;
-                document.querySelectorAll('.turma-chip').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.turma === value)));
+                document.querySelectorAll('.turma-chip[data-turma]').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.turma === value)));
                 applyFilters();
             }
 
@@ -467,10 +483,12 @@
             });
 
             search?.addEventListener('input', applyFilters);
-            document.querySelectorAll('.turma-chip').forEach(chip => chip.addEventListener('click', () => setTurma(chip.dataset.turma)));
+            document.querySelectorAll('.turma-chip[data-turma]').forEach(chip => chip.addEventListener('click', () => setTurma(chip.dataset.turma)));
+            document.querySelectorAll('.turma-chip[data-gender]').forEach(chip => chip.addEventListener('click', () => setGender(chip.dataset.gender)));
             document.addEventListener('click', e => {
                 if (!e.target.closest('[data-clear-filters]')) return;
                 if (search) search.value = '';
+                setGender('');
                 setTurma('');
             });
 

@@ -29,6 +29,7 @@ These settings are internal: they are not editable in the site, and they are nev
 |---|---|---|
 | `Admin:Email` | Admin login (an email address) | Yes. Without it nobody can log in. |
 | `Admin:LoginCode` | `false` turns off the emailed login code (e.g. if email sending is broken) | No (default `true`) |
+| `Admin:DevAutoLogin` | `true` on a development machine: requests from that computer are the admin, with no password or code. Ignored outside the Development environment, so it never applies on the server | No (default `false`) |
 | `Smtp:Host` | SMTP server (Amazon SES São Paulo: `email-smtp.sa-east-1.amazonaws.com`) | To send* |
 | `Smtp:Port` | SMTP port (`587`; `465` also works) | No (default `587`) |
 | `Smtp:User` | SMTP username (Amazon SES: *Nome de usuário SMTP*, starts with `AKIA`) | To send |
@@ -66,18 +67,20 @@ Ask the project owner for the actual values; never commit them or paste them in 
 
 ## Children spreadsheet
 
-The table must have these 11 columns side by side, **in this order**. Columns are recognised by position, so the header names can be anything. The table does not have to start at A1: the system uses the first row (within the first 50, on the first sheet that has one) with 11 filled cells side by side as the header, so a title block or logo above it is fine. Other sheets are kept as they are.
+The table must have these 12 columns side by side, **in this order**. Columns are recognised by position, so the header names can be anything. The table does not have to start at A1: the system uses the first row (within the first 50, on the first sheet that has one) with 12 filled cells side by side as the header, so a title block or logo above it is fine. Other sheets are kept as they are.
 
-`id, turma, faixa etária, nome da criança, idade, calçado, roupa, nome do doador, e-mail do doador, data do pedido, status`
+`id, turma, faixa etária, nome da criança, gênero, idade, calçado, roupa, nome do doador, e-mail do doador, data do pedido, status`
 
-Sheets in the older format, with a `telefone do doador` column between the donor's email and the request date, still work: that column is dropped when the file is read, and is gone from the file the next time it is saved.
+- `gênero` is `M` or `F` (also accepted: masculino, feminino, menino, menina; written back as `M`/`F`), or blank. The user page and the admin table can be filtered by it.
+
+Sheets in older layouts still work, brought up to date when read (the file changes the next time it is saved): a `telefone do doador` column is dropped, and if the column after the name isn't the gender (titled gênero/sexo, or holding only M/F), an empty `gênero` column is added there.
 
 - `id` must be filled in and unique for every child.
 - `status` is `disponível`, `pendente` or `aprovado` (case and accents are ignored). A blank status counts as `disponível`.
-- Uploads with fewer than 11 columns, a missing or repeated id, or an unrecognised status are rejected with a message saying what to fix. An unrecognised status usually means the columns are out of order.
+- Uploads with too few columns, a missing or repeated id, or an unrecognised status or gender are rejected with a message saying what to fix. An unrecognised status usually means the columns are out of order.
 - Status values are written capitalised (`Disponível`, `Pendente`, `Aprovado`).
 - Pictures that share an internal id (Google Sheets exports do this) are renumbered automatically when the file is read.
-- The user page shows only the first 7 columns (id to roupa).
+- The user page shows only the first 8 columns (id to roupa).
 - When a user sends children (giving name and email), they become `pendente` and the three donor columns are filled in.
 - Setting a child back to `disponível` clears the three donor columns.
 - **Kit entregue**: approved children get a switch in the first column of the admin table. The first time one is ticked, the system appends a `kit entregue` column to the sheet (value `Sim`). Moving a child out of `aprovado` clears it.
@@ -100,7 +103,7 @@ The donors spreadsheet has `nome, email` side by side (by position, header names
 
 ## How the spreadsheets are stored
 
-Each spreadsheet is uploaded through the site (**Enviar**) as an Excel file (`.xlsx`, also what Google Sheets downloads as Excel) or a CSV (comma, semicolon or tab separated; turned into `.xlsx`). The format is recognised by the content, not the file name, since phones often send files without an extension; `.ods`, old `.xls` and PDF files are refused with a message on how to export. It is stored in `data/` (configurable via `DataDirectory` in `appsettings.json`; this folder is git-ignored because it holds personal data). Later edits to the original file on the admin's computer are not seen: to get the current data, use **Baixar planilha atual**; to replace it, upload a new file.
+Each spreadsheet is uploaded through the site (**Enviar**) as an Excel file (`.xlsx`, also what Google Sheets downloads as Excel) or a CSV (comma, semicolon or tab separated; turned into `.xlsx`). The format is recognised by the content, not the file name, since phones often send files without an extension; `.ods`, old `.xls` and PDF files are refused with a message on how to export. It is stored in `data/` (configurable via `DataDirectory` in `appsettings.json`; this folder is git-ignored because it holds personal data). Later edits to the original file on the admin's computer are not seen: to get the current data, use **Baixar planilha atual**; to replace it, upload a new file. **Remover planilha** takes it off the site; the file is kept in `data/removidas` with the date in its name, in case it was removed by mistake.
 
 The stored file is the source of truth:
 

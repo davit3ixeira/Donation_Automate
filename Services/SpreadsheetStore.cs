@@ -25,6 +25,29 @@ public static class TextFold
     public static bool SameName(string a, string b) => Fold(a) == Fold(b);
 }
 
+/// <summary>The child's gender, "M" or "F" in the sheet. Blank is allowed (not informed).</summary>
+public static class ChildGender
+{
+    public const string Male = "M";
+    public const string Female = "F";
+
+    /// <summary>"M", "F" or "" for a raw cell value; null if it isn't a gender at all.</summary>
+    public static string? Of(string? raw) => TextFold.Fold(raw) switch
+    {
+        "" => "",
+        "m" or "masculino" or "menino" or "masc" => Male,
+        "f" or "feminino" or "menina" or "fem" => Female,
+        _ => null,
+    };
+
+    public static string Label(string gender) => gender switch
+    {
+        Male => "Menino",
+        Female => "Menina",
+        _ => "",
+    };
+}
+
 public static class ChildStatus
 {
     public const string Available = "disponível";
@@ -67,7 +90,7 @@ public static class ChildColumns
 {
     public static readonly IReadOnlyList<string> Expected =
     [
-        "id", "turma", "faixa etária", "nome da criança", "idade", "calçado", "roupa",
+        "id", "turma", "faixa etária", "nome da criança", "gênero", "idade", "calçado", "roupa",
         "nome do doador", "e-mail do doador", "data do pedido", "status",
     ];
 
@@ -76,16 +99,17 @@ public static class ChildColumns
     public const int Turma = 1;
     public const int AgeGroup = 2;
     public const int Nome = 3;
-    public const int Age = 4;
-    public const int Shoes = 5;
-    public const int Clothes = 6;
-    public const int DonorName = 7;
-    public const int DonorEmail = 8;
-    public const int RequestedAt = 9;
-    public const int Status = 10;
+    public const int Gender = 4;
+    public const int Age = 5;
+    public const int Shoes = 6;
+    public const int Clothes = 7;
+    public const int DonorName = 8;
+    public const int DonorEmail = 9;
+    public const int RequestedAt = 10;
+    public const int Status = 11;
 
     /// <summary>The first columns, up to "roupa", describe the child. Users only ever see these.</summary>
-    public const int PublicCount = 7;
+    public const int PublicCount = 8;
 
     /// <summary>Filled in when someone requests the child; cleared when it becomes available again.</summary>
     public static readonly IReadOnlyList<int> Donor = [DonorName, DonorEmail, RequestedAt];
@@ -229,6 +253,31 @@ public sealed class SpreadsheetStore
         lock (_gate) Save(wb, ChildrenPath);
     }
 
+    /// <summary>
+    /// Takes a spreadsheet off the site. The file isn't deleted: it moves to data/removidas with the
+    /// date in its name, in case it was removed by mistake.
+    /// </summary>
+    public void RemoveChildren() => Remove(ChildrenPath, "criancas");
+    public void RemoveEmails() => Remove(EmailsPath, "doadores");
+
+    private void Remove(string path, string name)
+    {
+        lock (_gate)
+        {
+            if (!File.Exists(path)) return;
+            var dir = Path.Combine(Path.GetDirectoryName(path)!, "removidas");
+            Directory.CreateDirectory(dir);
+            try
+            {
+                File.Move(path, Path.Combine(dir, $"{name}-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx"));
+            }
+            catch (IOException)
+            {
+                throw new SpreadsheetException("A planilha está aberta em outro programa (como o Excel). Feche-a e tente novamente.");
+            }
+        }
+    }
+
     public void ReplaceEmails(Stream upload)
     {
         using var wb = OpenUpload(upload);
@@ -259,6 +308,13 @@ public sealed class SpreadsheetStore
                     $"Linha {r}: \"{status}\" não é um status válido. A {ChildColumns.Status + 1}ª coluna da tabela ({t.Headers[ChildColumns.Status]}) " +
                     $"deve conter Disponível, Pendente ou Aprovado. Confira se as colunas estão na ordem: {ChildColumns.ExpectedList}.");
             cell.Value = ChildStatus.Label(status);
+
+            var genderCell = t.Cell(r, ChildColumns.Gender);
+            if (ChildGender.Of(Text(genderCell)) is not { } gender)
+                throw new SpreadsheetException(
+                    $"Linha {r}: \"{Text(genderCell)}\" não é um gênero válido. A {ChildColumns.Gender + 1}ª coluna da tabela ({t.Headers[ChildColumns.Gender]}) " +
+                    $"deve conter M, F ou ficar vazia. Confira se as colunas estão na ordem: {ChildColumns.ExpectedList}.");
+            genderCell.Value = gender;
         }
     }
 
@@ -618,21 +674,49 @@ public sealed class SpreadsheetStore
         return null;
     }
 
+    /// <summary>
+    /// The children table. Sheets in older layouts are brought up to date in the workbook, so they
+    /// keep working; the file itself changes the next time it is saved.
+    /// </summary>
     private static Table ChildrenTable(XLWorkbook wb)
     {
-        var t = FindTable(wb, ChildColumns.Expected.Count)
-            ?? throw new SpreadsheetException(
-                $"Não encontrei a tabela de crianças. Ela precisa de uma linha de cabeçalho com {ChildColumns.Expected.Count} " +
-                $"colunas preenchidas lado a lado, nesta ordem: {ChildColumns.ExpectedList}.");
+        var notFound = new SpreadsheetException(
+            $"Não encontrei a tabela de crianças. Ela precisa de uma linha de cabeçalho com {ChildColumns.Expected.Count} " +
+            $"colunas preenchidas lado a lado, nesta ordem: {ChildColumns.ExpectedList}.");
 
-        // Older sheets had a "telefone do doador" column where the request date now is. Drop it, so
-        // they keep working; the file loses it the next time it is saved.
-        if (t.Headers.Count > ChildColumns.RequestedAt && TextFold.Fold(t.Headers[ChildColumns.RequestedAt]).Contains("telefone"))
+        // Sheets from before the gender column have one column fewer.
+        var t = FindTable(wb, ChildColumns.Expected.Count - 1) ?? throw notFound;
+
+        // Older sheets had a "telefone do doador" column among the donor's: drop it.
+        var phone = t.Headers.FindIndex(h => TextFold.Fold(h).Contains("telefone"));
+        if (phone > ChildColumns.Nome)
         {
-            t.Sheet.Column(t.FirstColumn + ChildColumns.RequestedAt).Delete();
-            t = FindTable(wb, ChildColumns.Expected.Count)!;
+            t.Sheet.Column(t.FirstColumn + phone).Delete();
+            t = FindTable(wb, ChildColumns.Expected.Count - 1) ?? throw notFound;
+        }
+
+        // Sheets from before the gender column: add it, empty, after the name.
+        if (!LooksLikeGender(t))
+        {
+            t.Sheet.Column(t.FirstColumn + ChildColumns.Gender).InsertColumnsBefore(1);
+            t.Sheet.Cell(t.HeaderRow, t.FirstColumn + ChildColumns.Gender).Value = ChildColumns.Expected[ChildColumns.Gender];
+            t = FindTable(wb, ChildColumns.Expected.Count) ?? throw notFound;
         }
         return t;
+    }
+
+    /// <summary>Whether the column after the name is the gender: titled so, or holding only M/F values.</summary>
+    private static bool LooksLikeGender(Table t)
+    {
+        if (t.Headers.Count <= ChildColumns.Gender) return false;
+        var header = TextFold.Fold(t.Headers[ChildColumns.Gender]);
+        if (header.Contains("genero") || header.Contains("sexo")) return true;
+
+        var values = ContentRows(t, ChildColumns.Nome + 1)
+            .Select(r => Text(t.Cell(r, ChildColumns.Gender)))
+            .Where(v => v != "")
+            .ToList();
+        return values.Count > 0 && values.All(v => ChildGender.Of(v) is ChildGender.Male or ChildGender.Female);
     }
 
     private static SheetData Read(Table t, int contentColumns, int? keyIndex, DateTime lastModified)

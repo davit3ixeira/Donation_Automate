@@ -1,3 +1,5 @@
+using System.Net;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -62,6 +64,25 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
+
+// For testing on a development machine without the admin inbox: with Admin:DevAutoLogin true
+// (in appsettings.Local.json), requests from this computer count as the admin, with no password,
+// code or cookie. Never in Production, whatever the setting says.
+if (app.Environment.IsDevelopment() && app.Configuration.GetValue("Admin:DevAutoLogin", false))
+{
+    app.Logger.LogWarning("Admin:DevAutoLogin is on: requests from this computer are logged in as the admin.");
+    app.Use(async (context, next) =>
+    {
+        if (context.User.Identity?.IsAuthenticated != true
+            && context.Connection.RemoteIpAddress is { } ip && IPAddress.IsLoopback(ip))
+        {
+            var email = app.Configuration["Admin:Email"] ?? "admin@localhost";
+            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, email)], "DevAutoLogin"));
+        }
+        await next();
+    });
+}
+
 app.UseSiteAccess();
 app.UseAuthorization();
 app.MapRazorPages();

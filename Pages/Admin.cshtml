@@ -52,16 +52,28 @@
                 </h2>
                 <div class="section-actions">
                     <nav class="filters" aria-label="Filtrar por status">
-                        <a asp-route-filter="" class="@(string.IsNullOrEmpty(Model.Filter) ? "active" : null)">
+                        <a asp-route-filter="" asp-route-genero="@Model.Genero" class="@(string.IsNullOrEmpty(Model.Filter) ? "active" : null)">
                             Todas <span class="count">@Model.Children.Rows.Count</span>
                         </a>
                         @foreach (var s in ChildStatus.All)
                         {
-                            <a asp-route-filter="@ChildStatus.CssClass(s)" class="@(Model.Filter == ChildStatus.CssClass(s) ? "active" : null)">
+                            <a asp-route-filter="@ChildStatus.CssClass(s)" asp-route-genero="@Model.Genero" class="@(Model.Filter == ChildStatus.CssClass(s) ? "active" : null)">
                                 @ChildStatus.Label(s) <span class="count">@Model.Counts[s]</span>
                             </a>
                         }
                     </nav>
+                    @if (Model.GenderCount(ChildGender.Male) + Model.GenderCount(ChildGender.Female) > 0)
+                    {
+                        <nav class="filters" aria-label="Filtrar por gênero">
+                            <a asp-route-filter="@Model.Filter" asp-route-genero="" class="@(string.IsNullOrEmpty(Model.Genero) ? "active" : null)">Todos</a>
+                            @foreach (var g in new[] { ChildGender.Male, ChildGender.Female })
+                            {
+                                <a asp-route-filter="@Model.Filter" asp-route-genero="@g" class="@(ChildGender.Of(Model.Genero) == g ? "active" : null)">
+                                    @(g == ChildGender.Male ? "Meninos" : "Meninas") <span class="count">@Model.GenderCount(g)</span>
+                                </a>
+                            }
+                        </nav>
+                    }
                     <form method="post" asp-page-handler="AddRow">
                         <button class="btn btn-primary">+ Adicionar criança</button>
                     </form>
@@ -125,7 +137,7 @@
                                         }
                                         <td>
                                             <div class="status-cell">
-                                                <form method="post" asp-page-handler="Status" asp-route-filter="@Model.Filter">
+                                                <form method="post" asp-page-handler="Status" asp-route-filter="@Model.Filter" asp-route-genero="@Model.Genero">
                                                     <input type="hidden" name="id" value="@row.Key">
                                                     <select name="status" class="status status-@ChildStatus.CssClass(current)" aria-label="Status">
                                                         @if (!ChildStatus.All.Contains(current))
@@ -141,7 +153,7 @@
                                                 </form>
                                                 @if (current == ChildStatus.Pending)
                                                 {
-                                                    <form method="post" asp-page-handler="Status" asp-route-filter="@Model.Filter" class="approve-form">
+                                                    <form method="post" asp-page-handler="Status" asp-route-filter="@Model.Filter" asp-route-genero="@Model.Genero" class="approve-form">
                                                         <input type="hidden" name="id" value="@row.Key">
                                                         <input type="hidden" name="status" value="@ChildStatus.CssClass(ChildStatus.Approved)">
                                                         <button class="btn btn-small btn-approve">Aprovar</button>
@@ -153,7 +165,7 @@
                                     <td class="row-actions">
                                         @if (editable)
                                         {
-                                            <form method="post" asp-page-handler="DeleteRow" asp-route-filter="@Model.Filter" class="delete-form">
+                                            <form method="post" asp-page-handler="DeleteRow" asp-route-filter="@Model.Filter" asp-route-genero="@Model.Genero" class="delete-form">
                                                 <input type="hidden" name="id" value="@row.Key">
                                                 <button class="btn-icon" title="Excluir criança" aria-label="Excluir criança nº @row.Key">✕</button>
                                             </form>

@@ -11,7 +11,7 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
 {
     /// <summary>One child as shown on a card, already formatted for reading.</summary>
     public sealed record ChildCard(
-        string Id, string Name, string FirstName, string Initials, string Turma, string AgeGroup,
+        string Id, string Name, string FirstName, string Initials, string Gender, string Turma, string AgeGroup,
         string Age, string Shoes, string Clothes, string Search, string Color);
 
     /// <summary>A photo of a past Christmas party, from wwwroot/img.</summary>
@@ -20,6 +20,8 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
     public bool HasSpreadsheet { get; private set; }
     public IReadOnlyList<ChildCard> Children { get; private set; } = [];
     public IReadOnlyList<(string Turma, int Count)> Turmas { get; private set; } = [];
+    public int Boys => Children.Count(c => c.Gender == ChildGender.Male);
+    public int Girls => Children.Count(c => c.Gender == ChildGender.Female);
     public CampaignStats Stats { get; private set; } = new(0, 0, 0, 0);
     public SiteSettings SiteSettings { get; private set; } = new();
     public IReadOnlyList<YearPhoto> YearPhotos { get; private set; } = [];
@@ -174,7 +176,7 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
         var color = AvatarColors[(int)((uint)row.Key.GetHashCode(StringComparison.Ordinal) % AvatarColors.Length)];
 
         return new ChildCard(
-            row.Key, name, FirstWord(name), initials.ToUpperInvariant(),
+            row.Key, name, FirstWord(name), initials.ToUpperInvariant(), ChildGender.Of(Value(ChildColumns.Gender)) ?? "",
             Pretty(Value(ChildColumns.Turma)), Value(ChildColumns.AgeGroup), Value(ChildColumns.Age),
             Value(ChildColumns.Shoes), Value(ChildColumns.Clothes),
             TextFold.Fold($"{name} {row.Key}"), color);

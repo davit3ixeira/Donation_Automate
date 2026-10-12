@@ -14,7 +14,13 @@ public class AdminModel(SpreadsheetStore store, MailService mail, SiteSettingsSt
     [BindProperty(SupportsGet = true)]
     public string? Filter { get; set; }
 
-    protected override object RouteValues => new { Filter };
+    /// <summary>Optional gender filter for the children table: "M", "F" or null for all.</summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Genero { get; set; }
+
+    protected override object RouteValues => new { Filter, Genero };
+
+    public int GenderCount(string gender) => Children.Rows.Count(r => ChildGender.Of(r.Values[ChildColumns.Gender]) == gender);
 
     public SheetCard ChildrenCard => new("Planilha de crianças", "Children", "live-children-meta", Children,
         ChildColumns.ExpectedList, ConfirmReplace: true);
@@ -38,9 +44,10 @@ public class AdminModel(SpreadsheetStore store, MailService mail, SiteSettingsSt
             if (Counts.ContainsKey(status)) Counts[status]++;
         }
 
-        FilteredRows = string.IsNullOrEmpty(Filter)
-            ? Children.Rows
-            : Children.Rows.Where(r => StatusOf(r) == ChildStatus.Of(Filter)).ToList();
+        FilteredRows = Children.Rows
+            .Where(r => string.IsNullOrEmpty(Filter) || StatusOf(r) == ChildStatus.Of(Filter))
+            .Where(r => string.IsNullOrEmpty(Genero) || ChildGender.Of(r.Values[ChildColumns.Gender]) == ChildGender.Of(Genero))
+            .ToList();
     }
 
     public static string StatusOf(SheetRow row) => ChildStatus.Of(row.Values[ChildColumns.Status]);
@@ -67,6 +74,9 @@ public class AdminModel(SpreadsheetStore store, MailService mail, SiteSettingsSt
 
     public Task<IActionResult> OnPostUploadChildrenAsync(IFormFile? file) =>
         UploadAsync(file, Store.ReplaceChildren, "Planilha de crianças enviada.");
+
+    public IActionResult OnPostRemoveChildren() =>
+        Run(Store.RemoveChildren, () => "Planilha de crianças removida. Envie outra quando quiser.");
 
     public IActionResult OnGetDownloadChildren() => Download(Store.ChildrenPath, "criancas.xlsx");
 

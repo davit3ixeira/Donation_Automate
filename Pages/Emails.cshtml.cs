@@ -54,6 +54,9 @@ public class EmailsModel(SpreadsheetStore store, MailService mail, EmailSettings
     public Task<IActionResult> OnPostUploadEmailsAsync(IFormFile? file) =>
         UploadAsync(file, Store.ReplaceEmails, "Planilha de doadores enviada.");
 
+    public IActionResult OnPostRemoveEmails() =>
+        Run(Store.RemoveEmails, () => "Planilha de doadores removida. Envie outra quando quiser.");
+
     public IActionResult OnGetDownloadEmails() => Download(Store.EmailsPath, "doadores.xlsx");
 
     public Task<IActionResult> OnPostSendAllAsync(string template, Audience audience) =>
