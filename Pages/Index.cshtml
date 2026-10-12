@@ -266,21 +266,26 @@
             @Icon("search", 18)
             <input type="search" id="search" placeholder="Buscar pelo nome…" autocomplete="off">
         </label>
-        @if (Model.Boys > 0 && Model.Girls > 0)
-        {
-            <div class="turma-chips" role="group" aria-label="Filtrar por gênero">
-                <button type="button" class="turma-chip" data-gender="" aria-pressed="true">Todos</button>
-                <button type="button" class="turma-chip" data-gender="@ChildGender.Male" aria-pressed="false">Meninos <span class="count">@Model.Boys</span></button>
-                <button type="button" class="turma-chip" data-gender="@ChildGender.Female" aria-pressed="false">Meninas <span class="count">@Model.Girls</span></button>
-            </div>
+        @{
+            var byGender = Model.Boys > 0 && Model.Girls > 0;
+            var byTurma = Model.Turmas.Count > 1;
         }
-        @if (Model.Turmas.Count > 1)
+        @if (byGender || byTurma)
         {
-            <div class="turma-chips" role="group" aria-label="Filtrar por turma">
-                <button type="button" class="turma-chip" data-turma="" aria-pressed="true">Todas</button>
-                @foreach (var (turma, count) in Model.Turmas)
+            @* Gender and turma chips toggle on and off and combine; "Todos" clears both. *@
+            <div class="turma-chips" role="group" aria-label="Filtrar crianças">
+                <button type="button" class="turma-chip" data-all aria-pressed="true">Todos</button>
+                @if (byGender)
                 {
-                    <button type="button" class="turma-chip" data-turma="@turma" aria-pressed="false">@turma <span class="count">@count</span></button>
+                    <button type="button" class="turma-chip" data-gender="@ChildGender.Male" aria-pressed="false">Meninos <span class="count">@Model.Boys</span></button>
+                    <button type="button" class="turma-chip" data-gender="@ChildGender.Female" aria-pressed="false">Meninas <span class="count">@Model.Girls</span></button>
+                }
+                @if (byTurma)
+                {
+                    @foreach (var (turma, count) in Model.Turmas)
+                    {
+                        <button type="button" class="turma-chip" data-turma="@turma" aria-pressed="false">@turma <span class="count">@count</span></button>
+                    }
                 }
             </div>
         }
@@ -464,16 +469,28 @@
                     : visible === all.length ? `${all.length} crianças` : `${visible} de ${all.length} crianças`;
             }
 
-            function setGender(value) {
-                gender = value;
-                document.querySelectorAll('.turma-chip[data-gender]').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.gender === value)));
+            function syncChips() {
+                document.querySelectorAll('.turma-chip[data-gender]').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.gender === gender)));
+                document.querySelectorAll('.turma-chip[data-turma]').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.turma === turma)));
+                document.querySelector('.turma-chip[data-all]')?.setAttribute('aria-pressed', String(!gender && !turma));
                 applyFilters();
             }
 
+            // Clicking the active chip again turns that filter off.
+            function setGender(value) {
+                gender = gender === value ? '' : value;
+                syncChips();
+            }
+
             function setTurma(value) {
-                turma = value;
-                document.querySelectorAll('.turma-chip[data-turma]').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.turma === value)));
-                applyFilters();
+                turma = turma === value ? '' : value;
+                syncChips();
+            }
+
+            function clearChips() {
+                gender = '';
+                turma = '';
+                syncChips();
             }
 
             form.addEventListener('change', e => {
@@ -485,11 +502,11 @@
             search?.addEventListener('input', applyFilters);
             document.querySelectorAll('.turma-chip[data-turma]').forEach(chip => chip.addEventListener('click', () => setTurma(chip.dataset.turma)));
             document.querySelectorAll('.turma-chip[data-gender]').forEach(chip => chip.addEventListener('click', () => setGender(chip.dataset.gender)));
+            document.querySelector('.turma-chip[data-all]')?.addEventListener('click', clearChips);
             document.addEventListener('click', e => {
                 if (!e.target.closest('[data-clear-filters]')) return;
                 if (search) search.value = '';
-                setGender('');
-                setTurma('');
+                clearChips();
             });
 
             document.getElementById('bag-clear').addEventListener('click', () => {
