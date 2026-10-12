@@ -5,23 +5,32 @@ namespace DonationAutomate.Services;
 
 public sealed record EmailTemplate(string Subject, string Body);
 
-/// <summary>The editable email templates. Campaign ones go to the whole donor list; Approval goes to one donor.</summary>
+/// <summary>
+/// The editable email templates. Campaign ones go to the whole donor list; the others go to one
+/// donor along a request: Received when they choose, Confirmation when the admin sends the
+/// confirmation link, Approval once the choice is confirmed.
+/// </summary>
 public static class TemplateKeys
 {
     public const string Invite = "convite";
     public const string Progress = "progresso";
     public const string Final = "final";
+    public const string Received = "pedido";
+    public const string Confirmation = "confirmacao";
     public const string Approval = "aprovacao";
 
     public static readonly IReadOnlyList<string> Campaign = [Invite, Progress, Final];
-    public static readonly IReadOnlyList<string> All = [Invite, Progress, Final, Approval];
+    public static readonly IReadOnlyList<string> Donor = [Received, Confirmation, Approval];
+    public static readonly IReadOnlyList<string> All = [Invite, Progress, Final, Received, Confirmation, Approval];
 
     public static string Label(string key) => key switch
     {
         Invite => "Convite",
         Progress => "Progresso",
         Final => "Agradecimento final",
-        Approval => "Aprovação do pedido",
+        Received => "Pedido recebido",
+        Confirmation => "Confirme sua escolha",
+        Approval => "Instruções de entrega",
         _ => key,
     };
 
@@ -30,25 +39,39 @@ public static class TemplateKeys
         Invite => "No início da campanha, convidando a apadrinhar.",
         Progress => "No meio da campanha, com quantas crianças ainda estão disponíveis.",
         Final => "No fim da campanha, agradecendo a todos.",
-        Approval => "Enviado automaticamente ao doador quando um pedido passa de Pendente para Aprovado.",
+        Received => "Enviado automaticamente ao padrinho assim que ele escolhe as crianças no site.",
+        Confirmation => "Enviado pelo botão \"Enviar e-mail de confirmação\" do admin, com o link para o padrinho confirmar.",
+        Approval => "Enviado quando o padrinho confirma pelo link (ou o admin confirma): como e até quando entregar o kit ou fazer o Pix.",
         _ => "",
     };
 
     /// <summary>Placeholders the admin can use, with what they turn into.</summary>
-    public static IReadOnlyList<(string Name, string Meaning)> Placeholders(string key) => key == Approval
-        ?
+    public static IReadOnlyList<(string Name, string Meaning)> Placeholders(string key) => key switch
+    {
+        Received =>
         [
-            ("{nome}", "nome do doador"), ("{crianca}", "nome da criança"), ("{turma}", "turma"),
-            ("{faixa}", "faixa etária"), ("{idade}", "idade"), ("{calcado}", "calçado"), ("{roupa}", "roupa"),
-            ("{id}", "nº da criança"), ("{link}", "endereço do site"),
-        ]
-        :
+            ("{nome}", "nome do padrinho"), ("{criancas}", "lista das crianças escolhidas"),
+            ("{quantidade}", "quantas crianças"), ("{doacao}", "kit ou Pix"), ("{prazo}", "data limite de entrega"),
+        ],
+        Confirmation =>
+        [
+            ("{nome}", "nome do padrinho"), ("{criancas}", "lista das crianças"), ("{quantidade}", "quantas crianças"),
+            ("{doacao}", "kit ou Pix"), ("{prazo}", "data limite de entrega"), ("{link_confirmar}", "link para confirmar"),
+        ],
+        Approval =>
+        [
+            ("{nome}", "nome do padrinho"), ("{criancas}", "lista das crianças"), ("{quantidade}", "quantas crianças"),
+            ("{doacao}", "kit ou Pix"), ("{prazo}", "data limite de entrega"),
+            ("{instrucoes}", "como entregar: endereço do kit e/ou chave Pix"),
+        ],
+        _ =>
         [
             ("{nome}", "nome do doador"), ("{link}", "endereço do site"), ("{total}", "total de crianças"),
             ("{disponiveis}", "crianças disponíveis"), ("{percentual_disponivel}", "% disponíveis"),
             ("{apadrinhadas}", "crianças já escolhidas"), ("{percentual_apadrinhado}", "% escolhidas"),
             ("{aprovadas}", "pedidos aprovados"),
-        ];
+        ],
+    };
 
     public static readonly IReadOnlyDictionary<string, EmailTemplate> Defaults = new Dictionary<string, EmailTemplate>
     {
@@ -83,14 +106,49 @@ public static class TemplateKeys
 
             Muito obrigado, e boas festas!
             """),
-        [Approval] = new(
-            "Pedido aprovado: {crianca}",
+        [Received] = new(
+            "Recebemos sua escolha no Natal Solidário",
             """
             Olá, {nome}!
 
-            Seu pedido para apadrinhar {crianca} ({turma}, {idade}) foi aprovado. Muito obrigado pelo carinho!
+            Recebemos o seu pedido para apadrinhar:
 
-            Para ajudar na escolha do presente: calçado {calcado}, roupa {roupa}.
+            {criancas}
+
+            Forma de doação: {doacao}.
+
+            A nossa equipe vai conferir e, em breve, você recebe outro e-mail com um link para confirmar a sua escolha e saber os próximos passos. Se ele não aparecer, dê uma olhada na caixa de spam ou de promoções.
+
+            Muito obrigado por fazer parte do nosso Natal!
+            """),
+        [Confirmation] = new(
+            "Pedido aprovado: confirme sua escolha",
+            """
+            Olá, {nome}!
+
+            O seu pedido foi aprovado! Estas são as crianças que você vai apadrinhar:
+
+            {criancas}
+
+            Para confirmar, abra o link abaixo e clique em "Confirmar":
+            {link_confirmar}
+
+            Assim que você confirmar, enviamos as instruções de entrega ({doacao}), que deve ser feita até {prazo}.
+
+            Muito obrigado!
+            """),
+        [Approval] = new(
+            "Tudo certo! Próximos passos do seu apadrinhamento",
+            """
+            Olá, {nome}!
+
+            Sua escolha está confirmada. Muito obrigado pelo carinho!
+
+            {criancas}
+
+            {instrucoes}
+
+            Qualquer dúvida, é só responder este e-mail.
 
             Com carinho,
             """),

@@ -29,6 +29,8 @@ builder.Services.AddSingleton<LoginCodes>();
 builder.Services.AddSingleton<TrustedDevices>();
 builder.Services.AddSingleton<AdminPasswords>();
 builder.Services.AddSingleton<PasswordResets>();
+builder.Services.AddSingleton<DonorConfirmations>();
+builder.Services.AddSingleton<RequestFlow>();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>

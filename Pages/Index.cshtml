@@ -97,7 +97,10 @@
             Seu pedido para @(Model.ThanksCount == 1 ? "1 criança" : $"{Model.ThanksCount} crianças") foi recebido
             e está aguardando a confirmação da equipe.
         </p>
-        <p>Assim que for confirmado, você recebe por e-mail as orientações para montar e entregar o Kit.</p>
+        <p>
+            Enviamos um e-mail com as crianças que você escolheu. Em breve chega outro, com um link para confirmar
+            a sua escolha e os próximos passos. Se não encontrar, confira a caixa de spam ou de promoções.
+        </p>
         <a href="#criancas" class="btn">@Icon("plus", 18) Escolher mais uma criança</a>
     </section>
 }
@@ -363,6 +366,7 @@
             <div class="bag-text" aria-live="polite">
                 <strong id="bag-title">A sacola do Papai Noel está vazia</strong>
                 <span id="bag-names"></span>
+                <small class="bag-value" id="bag-value"></small>
             </div>
             <button type="button" class="btn btn-ghost" id="bag-clear">Esvaziar</button>
             <button type="button" class="btn btn-primary" id="open-send">Continuar @Icon("arrow", 18)</button>
@@ -379,6 +383,33 @@
         </div>
 
         <ul class="dialog-children" id="dialog-children" aria-label="Crianças na sacola do Papai Noel"></ul>
+
+        @* The kit is the way to help; the Pix is there for whoever can't buy it, one click away. *@
+        <fieldset class="donation-choice">
+            <legend>Como você vai ajudar?</legend>
+            <p class="donation-intro">
+                Cada criança ganha um <strong>kit</strong> com roupa, calçado e brinquedo. Valor médio:
+                <strong>R$ @SiteSettingsStore.Money(Model.SiteSettings.PixValue)</strong> por criança<span id="dialog-total"></span>.
+            </p>
+            <label class="donation-option is-main">
+                <input type="radio" name="Donation" value="@ChildDonation.Kit" checked="@(Model.Donation != ChildDonation.Pix)">
+                <span>
+                    <strong>@Icon("gift", 18) Vou comprar o kit <em class="tag">recomendado</em></strong>
+                    <small>Você escolhe e compra o presente e entrega até @MailService.Deadline(Model.SiteSettings). É a parte mais especial da campanha!</small>
+                </span>
+            </label>
+            <details class="pix-alt" open="@(Model.Donation == ChildDonation.Pix)">
+                <summary>Não consegue comprar o kit?</summary>
+                <label class="donation-option">
+                    <input type="radio" name="Donation" value="@ChildDonation.Pix" checked="@(Model.Donation == ChildDonation.Pix)">
+                    <span>
+                        <strong>Doar via Pix</strong>
+                        <small>A equipe compra o kit por você. Valor médio de R$ @SiteSettingsStore.Money(Model.SiteSettings.PixValue) por criança, até @MailService.Deadline(Model.SiteSettings).</small>
+                    </span>
+                </label>
+            </details>
+            <span asp-validation-for="Donation" class="field-error"></span>
+        </fieldset>
 
         <div class="field">
             <label asp-for="Name"></label>
@@ -430,6 +461,10 @@
             let turma = '';
             let gender = '';
 
+            // Average cost of a kit (and suggested Pix) per child, from the campaign settings.
+            const kitValue = @Model.SiteSettings.PixValue;
+            const money = n => `R$ ${n.toLocaleString('pt-BR')}`;
+
             // Cards live inside #live-list, which is replaced on refresh: always look them up fresh.
             const boxes = () => [...form.querySelectorAll('input[name="Selected"]')];
             const cardOf = box => box.closest('.child-card');
@@ -448,6 +483,8 @@
                 document.getElementById('bag-names').textContent = names.length > 3
                     ? `${names.slice(0, 3).join(', ')} e mais ${names.length - 3}`
                     : names.join(', ');
+                document.getElementById('bag-value').textContent = n === 0 ? ''
+                    : `Kits em média ${money(kitValue)} cada · total ≈ ${money(n * kitValue)}`;
                 if (bump) Festive.replay(document.getElementById('bag-icon'), 'bump');
             }
 
@@ -515,7 +552,14 @@
             });
 
             // The dialog lists who is in the bag, each with a button to take them out.
+            function showTotal() {
+                const n = chosen().length;
+                document.getElementById('dialog-total').textContent =
+                    n > 1 ? ` (${n} crianças ≈ ${money(n * kitValue)})` : '';
+            }
+
             function fillDialog() {
+                showTotal();
                 const list = document.getElementById('dialog-children');
                 list.replaceChildren(...chosen().map(box => {
                     const card = cardOf(box);
@@ -540,6 +584,7 @@
                         box.checked = false;
                         li.remove();
                         updateBag();
+                        showTotal();
                         if (!list.children.length) dialog.close();
                     });
                     li.append(avatar, info, remove);

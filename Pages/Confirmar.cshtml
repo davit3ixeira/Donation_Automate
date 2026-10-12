@@ -1,0 +1,62 @@
+@page
+@model ConfirmarModel
+@{
+    ViewData["Title"] = "Confirmar apadrinhamento";
+    var greeting = Model.DonorName != "" ? $"{Model.DonorName.Split(' ')[0]}, " : "";
+}
+
+<div class="page-head">
+    <div>
+        <p class="eyebrow">Natal Solidário</p>
+        @switch (Model.Status)
+        {
+            case ConfirmarModel.State.Pending:
+                <h1>Confirme sua escolha</h1>
+                <p class="muted">@(greeting)você vai apadrinhar:</p>
+                break;
+            case ConfirmarModel.State.Done:
+                <h1>Escolha confirmada! 🎄</h1>
+                <p class="muted">Muito obrigado, @(greeting)de coração. Enviamos para o seu e-mail as instruções de entrega e o prazo. Se não encontrar, confira a caixa de spam.</p>
+                break;
+            case ConfirmarModel.State.AlreadyConfirmed:
+                <h1>Escolha já confirmada</h1>
+                <p class="muted">Está tudo certo, @(greeting)a sua escolha já tinha sido confirmada. As instruções de entrega estão no seu e-mail.</p>
+                break;
+            case ConfirmarModel.State.Unavailable:
+                <h1>Pedido não encontrado</h1>
+                <p class="muted">Estas crianças não estão mais reservadas para você. Se achar que é um engano, responda o e-mail que recebemos de você.</p>
+                break;
+            default:
+                <h1>Link inválido</h1>
+                <p class="muted">Este link de confirmação não é válido ou expirou. Responda o e-mail que você recebeu e a equipe ajuda.</p>
+                break;
+        }
+    </div>
+</div>
+
+@if (Model.ChildNames.Count > 0 && Model.Status is ConfirmarModel.State.Pending or ConfirmarModel.State.Done or ConfirmarModel.State.AlreadyConfirmed)
+{
+    <section class="cards">
+        <div class="card">
+            <ul class="confirm-children">
+                @foreach (var name in Model.ChildNames)
+                {
+                    <li>🎁 @name</li>
+                }
+            </ul>
+            @if (Model.Warning is not null)
+            {
+                <p class="field-error">@Model.Warning</p>
+            }
+            @if (Model.Status == ConfirmarModel.State.Pending)
+            {
+                <form method="post">
+                    <input type="hidden" name="token" value="@Model.Token">
+                    <div class="actions">
+                        <button class="btn btn-primary btn-lg">Confirmar</button>
+                    </div>
+                </form>
+            }
+        </div>
+    </section>
+}

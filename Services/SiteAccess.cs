@@ -16,7 +16,7 @@ public static class SiteAccess
 
     /// <summary>Pages that don't need the key (the staff pages have their own login).</summary>
     private static readonly string[] OpenPaths =
-        ["/Privado", "/Login", "/Logout", "/EsqueciSenha", "/RedefinirSenha", "/Admin", "/Emails", "/Error"];
+        ["/Privado", "/Login", "/Logout", "/EsqueciSenha", "/RedefinirSenha", "/Confirmar", "/Admin", "/Emails", "/Error"];
 
     public static string? Key(IConfiguration config) =>
         string.IsNullOrWhiteSpace(config["SiteAccessKey"]) ? null : config["SiteAccessKey"]!.Trim();

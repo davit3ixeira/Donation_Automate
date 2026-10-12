@@ -265,7 +265,19 @@ details.card[open] .table-wrap { margin-top: 14px; }
 .section-head h2 { color: var(--cream); display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .section-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .section-actions form { margin: 0; }
-.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.filter-rows { display: flex; flex-wrap: wrap; gap: 10px 24px; margin-bottom: 14px; }
+.filters-label { font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-right: 2px; }
+.btn-text {
+    border: 0; background: none; padding: 2px 4px; cursor: pointer; font: inherit; font-size: 0.8rem;
+    color: var(--muted); text-decoration: underline; text-underline-offset: 3px;
+}
+.btn-text:hover { color: var(--cream); }
+.status-cell .flow-form { margin: 0; }
+.donation-select {
+    font: inherit; font-size: 0.88rem; padding: 4px 8px; border-radius: 8px;
+    border: 1px solid var(--border-strong); background: var(--bg-deep); color: var(--text);
+}
 .filters a {
     color: var(--muted); text-decoration: none; padding: 6px 14px; font-size: 0.9rem; font-weight: 700;
     border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
@@ -971,6 +983,28 @@ dialog.viewer::backdrop { background: rgba(3, 10, 7, 0.9); }
 .dialog-children .info { flex: 1; min-width: 0; font-size: 0.92rem; font-weight: 800; color: var(--cream); }
 .dialog-children .info small { display: block; color: var(--muted); font-weight: 600; }
 .privacy { font-size: 0.8rem; color: var(--muted); margin: 14px 0 0; text-align: center; }
+.bag-value { font-size: 0.8rem; color: var(--gold-bright); font-weight: 700; }
+
+/* Kit or Pix: the kit is the main, highlighted option; the Pix sits behind a "can't buy it?" */
+.donation-choice { border: 0; padding: 0; margin: 4px 0 14px; min-width: 0; }
+.donation-choice legend { font-weight: 800; color: var(--cream); margin-bottom: 4px; padding: 0; }
+.donation-intro { font-size: 0.88rem; color: var(--muted); margin: 0 0 10px; }
+.donation-intro strong { color: var(--cream); }
+.donation-option {
+    display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+}
+.donation-option input { margin-top: 3px; }
+.donation-option strong { display: flex; align-items: center; gap: 6px; color: var(--cream); font-size: 0.95rem; }
+.donation-option small { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 2px; }
+.donation-option:has(input:checked) { border-color: var(--gold); background: var(--gold-soft); }
+.donation-option .tag {
+    font-style: normal; font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 2px 7px; border-radius: 999px; background: var(--gold); color: #1b1407;
+}
+.pix-alt { margin-top: 8px; font-size: 0.85rem; }
+.pix-alt summary { cursor: pointer; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; margin-bottom: 8px; }
+.confirm-children { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 6px; font-weight: 700; }
 
 /* ----------------------------------------------------------------- Confetti */
 .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }

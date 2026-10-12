@@ -25,6 +25,23 @@ public static class TextFold
     public static bool SameName(string a, string b) => Fold(a) == Fold(b);
 }
 
+/// <summary>How a donor helps a child: buying the Christmas kit (the usual way) or, failing that, a Pix.</summary>
+public static class ChildDonation
+{
+    public const string Kit = "Kit";
+    public const string Pix = "Pix";
+    public static readonly IReadOnlyList<string> All = [Kit, Pix];
+
+    /// <summary>"Kit", "Pix" or "" for a raw cell or form value; null if it is neither.</summary>
+    public static string? Of(string? raw) => TextFold.Fold(raw) switch
+    {
+        "" => "",
+        "kit" => Kit,
+        "pix" => Pix,
+        _ => null,
+    };
+}
+
 /// <summary>The child's gender, "M" or "F" in the sheet. Blank is allowed (not informed).</summary>
 public static class ChildGender
 {
@@ -114,11 +131,22 @@ public static class ChildColumns
     /// <summary>Filled in when someone requests the child; cleared when it becomes available again.</summary>
     public static readonly IReadOnlyList<int> Donor = [DonorName, DonorEmail, RequestedAt];
 
-    /// <summary>
-    /// Appended by the system after the expected columns (found by name) the first time a kit is
-    /// marked as delivered. "Sim" means delivered.
-    /// </summary>
-    public const string KitDelivered = "kit entregue";
+    // Columns the system appends after the expected ones the first time it needs them, found by name.
+
+    /// <summary>"Sim" once the donation (kit or Pix) was received. Only approved requests have one.</summary>
+    public const string Done = "realizado";
+
+    /// <summary>What <see cref="Done"/> used to be called; renamed when a sheet is read.</summary>
+    public const string OldDone = "kit entregue";
+
+    /// <summary>How the donor will help: "Kit" or "Pix" (see <see cref="ChildDonation"/>).</summary>
+    public const string Donation = "doação";
+
+    /// <summary>When the admin emailed the donor the confirmation link; blank until then.</summary>
+    public const string ConfirmationSent = "confirmação enviada";
+
+    /// <summary>Filled in alongside a request; cleared when the child becomes available again.</summary>
+    public static readonly IReadOnlyList<string> RequestExtras = [Donation, ConfirmationSent];
 
     public static string ExpectedList => string.Join(", ", Expected);
 
@@ -161,13 +189,27 @@ public sealed record SheetData(IReadOnlyList<string> Headers, IReadOnlyList<Shee
         return -1;
     }
 
-    /// <summary>The children sheet's "kit entregue" column, or -1 while no kit has been marked yet.</summary>
-    public int KitColumn => ColumnIndex(ChildColumns.KitDelivered, ChildColumns.Expected.Count);
+    // The children sheet's system columns, or -1 while the system hasn't needed them yet.
+    public int DoneColumn => ColumnIndex(ChildColumns.Done, ChildColumns.Expected.Count);
+    public int DonationColumn => ColumnIndex(ChildColumns.Donation, ChildColumns.Expected.Count);
+    public int ConfirmationSentColumn => ColumnIndex(ChildColumns.ConfirmationSent, ChildColumns.Expected.Count);
 
-    public bool KitDelivered(SheetRow row) => KitColumn is var i and >= 0 && ChildColumns.IsYes(row.Values[i]);
+    public bool Done(SheetRow row) => DoneColumn is var i and >= 0 && ChildColumns.IsYes(row.Values[i]);
+    public string Donation(SheetRow row) => DonationColumn is var i and >= 0 ? ChildDonation.Of(row.Values[i]) ?? "" : "";
+    public bool ConfirmationSent(SheetRow row) => ConfirmationSentColumn is var i and >= 0 && row.Values[i].Trim() != "";
 }
 
-public sealed record RequestResult(int Requested, int Unavailable);
+/// <summary>A child requested by a donor: the row's expected columns, and how the donor will help.</summary>
+public sealed record RequestedChild(IReadOnlyList<string> Values, string Donation);
+
+/// <param name="Children">The children this request made pending, as saved.</param>
+public sealed record RequestResult(int Requested, int Unavailable, IReadOnlyList<RequestedChild> Children);
+
+/// <summary>A donor's requested children, with the donor's name and address as in the sheet.</summary>
+public sealed record DonorChildren(string Name, string Email, IReadOnlyList<RequestedChild> Children)
+{
+    public IReadOnlyList<string> Ids => Children.Select(c => c.Values[ChildColumns.Id].Trim()).ToList();
+}
 
 /// <param name="Values">The child's row (table columns) as it was before the change.</param>
 public sealed record StatusChange(string Previous, string Current, IReadOnlyList<string> Values);
@@ -319,15 +361,18 @@ public sealed class SpreadsheetStore
     }
 
     /// <summary>Marks the given children as pending for this donor. Skips any no longer available.</summary>
-    public RequestResult RequestChildren(IEnumerable<string> ids, string name, string email)
+    /// <param name="donation">"Kit" or "Pix" (see <see cref="ChildDonation"/>).</param>
+    public RequestResult RequestChildren(IEnumerable<string> ids, string name, string email, string donation)
     {
+        donation = ChildDonation.Of(donation) is { Length: > 0 } d ? d : ChildDonation.Kit;
         lock (_gate)
         {
             using var wb = LoadExisting(ChildrenPath);
             var t = ChildrenTable(wb);
             var rowsById = IndexById(t);
             var now = DateTime.Now;
-            int requested = 0, unavailable = 0;
+            int unavailable = 0;
+            var children = new List<RequestedChild>();
 
             foreach (var id in ids.Distinct())
             {
@@ -344,12 +389,106 @@ public sealed class SpreadsheetStore
                 var at = t.Cell(row, ChildColumns.RequestedAt);
                 at.Value = now;
                 at.Style.DateFormat.Format = "dd/mm/yyyy hh:mm";
-                requested++;
+                EnsureColumns(t, ChildColumns.Expected.Count, ChildColumns.RequestExtras);
+                t.Cell(row, ColumnIndex(t, ChildColumns.Expected.Count, ChildColumns.Donation)).Value = donation;
+                t.Cell(row, ColumnIndex(t, ChildColumns.Expected.Count, ChildColumns.ConfirmationSent)).Clear(XLClearOptions.Contents);
+                children.Add(Requested(t, row));
             }
 
-            if (requested > 0) Save(wb, ChildrenPath);
-            return new RequestResult(requested, unavailable);
+            if (children.Count > 0) Save(wb, ChildrenPath);
+            return new RequestResult(children.Count, unavailable, children);
         }
+    }
+
+    /// <summary>
+    /// The pending children of the donor who asked for this one (same email), including it. Null if
+    /// the child isn't pending.
+    /// </summary>
+    public DonorChildren? PendingOfDonor(string id)
+    {
+        lock (_gate)
+        {
+            using var wb = LoadExisting(ChildrenPath);
+            var t = ChildrenTable(wb);
+            if (!IndexById(t).TryGetValue(id, out var row))
+                throw new SpreadsheetException($"Criança com id \"{id}\" não encontrada. A planilha pode ter mudado; recarregue a página.");
+            if (ChildStatus.Of(Text(t.Cell(row, ChildColumns.Status))) != ChildStatus.Pending) return null;
+
+            var email = Text(t.Cell(row, ChildColumns.DonorEmail));
+            var rows = DonorRows(t, email, ChildStatus.Pending);
+            return new DonorChildren(Text(t.Cell(row, ChildColumns.DonorName)), email, rows.Select(r => Requested(t, r)).ToList());
+        }
+    }
+
+    /// <summary>Notes, on each of these children's rows, that the confirmation link was emailed now.</summary>
+    public void MarkConfirmationSent(IEnumerable<string> ids)
+    {
+        lock (_gate)
+        {
+            using var wb = LoadExisting(ChildrenPath);
+            var t = ChildrenTable(wb);
+            var rowsById = IndexById(t);
+            EnsureColumns(t, ChildColumns.Expected.Count, ChildColumns.RequestExtras);
+            var column = ColumnIndex(t, ChildColumns.Expected.Count, ChildColumns.ConfirmationSent);
+            foreach (var id in ids)
+            {
+                if (!rowsById.TryGetValue(id, out var row)) continue;
+                var cell = t.Cell(row, column);
+                cell.Value = DateTime.Now;
+                cell.Style.DateFormat.Format = "dd/mm/yyyy hh:mm";
+            }
+            Save(wb, ChildrenPath);
+        }
+    }
+
+    /// <summary>
+    /// Approves these children, the ones still pending for this donor (same email); others are
+    /// left alone (chosen again by someone else, or already approved). Returns the approved ones.
+    /// </summary>
+    public DonorChildren ApproveForDonor(string email, IEnumerable<string> ids)
+    {
+        lock (_gate)
+        {
+            using var wb = LoadExisting(ChildrenPath);
+            var t = ChildrenTable(wb);
+            var wanted = ids.ToHashSet();
+            var rows = DonorRows(t, email, ChildStatus.Pending)
+                .Where(r => wanted.Contains(Text(t.Cell(r, ChildColumns.Id))))
+                .ToList();
+            foreach (var r in rows)
+                t.Cell(r, ChildColumns.Status).Value = ChildStatus.Label(ChildStatus.Approved);
+
+            var name = rows.Count > 0 ? Text(t.Cell(rows[0], ChildColumns.DonorName)) : "";
+            if (rows.Count > 0) Save(wb, ChildrenPath);
+            return new DonorChildren(name, email, rows.Select(r => Requested(t, r)).ToList());
+        }
+    }
+
+    /// <summary>Whether these children are already approved for this donor (e.g. a confirmation link opened twice).</summary>
+    public bool AllApprovedForDonor(string email, IEnumerable<string> ids)
+    {
+        lock (_gate)
+        {
+            using var wb = LoadExisting(ChildrenPath);
+            var t = ChildrenTable(wb);
+            var approved = DonorRows(t, email, ChildStatus.Approved).Select(r => Text(t.Cell(r, ChildColumns.Id))).ToHashSet();
+            return ids.All(approved.Contains);
+        }
+    }
+
+    /// <summary>Rows with this status whose donor email matches (ignoring case and spaces).</summary>
+    private static List<int> DonorRows(Table t, string email, string status) =>
+        ContentRows(t, ChildColumns.PublicCount)
+            .Where(r => ChildStatus.Of(Text(t.Cell(r, ChildColumns.Status))) == status)
+            .Where(r => string.Equals(Text(t.Cell(r, ChildColumns.DonorEmail)), email.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private static RequestedChild Requested(Table t, int row)
+    {
+        var donation = ColumnIndex(t, ChildColumns.Expected.Count, ChildColumns.Donation) is var d and >= 0
+            ? ChildDonation.Of(Text(t.Cell(row, d))) ?? ""
+            : "";
+        return new RequestedChild(RowValues(t, row), donation);
     }
 
     /// <summary>Changes a child's status and reports what it was, so callers can react (e.g. email the donor on approval).</summary>
@@ -374,17 +513,20 @@ public sealed class SpreadsheetStore
                 // Back on the public list, so the previous donor no longer applies.
                 foreach (var column in ChildColumns.Donor)
                     t.Cell(row, column).Clear(XLClearOptions.Contents);
+                foreach (var name in ChildColumns.RequestExtras)
+                    if (ColumnIndex(t, ChildColumns.Expected.Count, name) is var extra and >= 0)
+                        t.Cell(row, extra).Clear(XLClearOptions.Contents);
             }
-            if (status != ChildStatus.Approved && ColumnIndex(t, ChildColumns.Expected.Count, ChildColumns.KitDelivered) is var kit and >= 0)
-                t.Cell(row, kit).Clear(XLClearOptions.Contents);  // only approved requests have a kit
+            if (status != ChildStatus.Approved && ColumnIndex(t, ChildColumns.Expected.Count, ChildColumns.Done) is var done and >= 0)
+                t.Cell(row, done).Clear(XLClearOptions.Contents);  // only approved requests can be done
 
             Save(wb, ChildrenPath);
             return new StatusChange(previous, status, before);
         }
     }
 
-    /// <summary>Marks an approved child's kit as delivered (or not), adding the column on first use.</summary>
-    public void SetKitDelivered(string id, bool delivered)
+    /// <summary>Marks an approved child's donation as done (or not), adding the column on first use.</summary>
+    public void SetDone(string id, bool done)
     {
         lock (_gate)
         {
@@ -393,12 +535,32 @@ public sealed class SpreadsheetStore
             if (!IndexById(t).TryGetValue(id, out var row))
                 throw new SpreadsheetException($"Criança com id \"{id}\" não encontrada. A planilha pode ter mudado; recarregue a página.");
             if (ChildStatus.Of(Text(t.Cell(row, ChildColumns.Status))) != ChildStatus.Approved)
-                throw new SpreadsheetException("Só dá para marcar o kit de crianças com pedido aprovado.");
+                throw new SpreadsheetException("Só dá para marcar como realizado quando o pedido está aprovado.");
 
-            EnsureColumns(t, ChildColumns.Expected.Count, [ChildColumns.KitDelivered]);
-            var cell = t.Cell(row, ColumnIndex(t, ChildColumns.Expected.Count, ChildColumns.KitDelivered));
-            if (delivered) cell.Value = "Sim";
+            EnsureColumns(t, ChildColumns.Expected.Count, [ChildColumns.Done]);
+            var cell = t.Cell(row, ColumnIndex(t, ChildColumns.Expected.Count, ChildColumns.Done));
+            if (done) cell.Value = "Sim";
             else cell.Clear(XLClearOptions.Contents);
+            Save(wb, ChildrenPath);
+        }
+    }
+
+    /// <summary>Sets how the donor of a pending or approved child will help: "Kit" or "Pix".</summary>
+    public void SetDonation(string id, string value)
+    {
+        if (ChildDonation.Of(value) is not { Length: > 0 } donation)
+            throw new SpreadsheetException("Escolha Kit ou Pix.");
+        lock (_gate)
+        {
+            using var wb = LoadExisting(ChildrenPath);
+            var t = ChildrenTable(wb);
+            if (!IndexById(t).TryGetValue(id, out var row))
+                throw new SpreadsheetException($"Criança com id \"{id}\" não encontrada. A planilha pode ter mudado; recarregue a página.");
+            if (ChildStatus.Of(Text(t.Cell(row, ChildColumns.Status))) == ChildStatus.Available)
+                throw new SpreadsheetException("Esta criança ainda não tem padrinho.");
+
+            EnsureColumns(t, ChildColumns.Expected.Count, ChildColumns.RequestExtras);
+            t.Cell(row, ColumnIndex(t, ChildColumns.Expected.Count, ChildColumns.Donation)).Value = donation;
             Save(wb, ChildrenPath);
         }
     }
@@ -701,6 +863,14 @@ public sealed class SpreadsheetStore
             t.Sheet.Column(t.FirstColumn + ChildColumns.Gender).InsertColumnsBefore(1);
             t.Sheet.Cell(t.HeaderRow, t.FirstColumn + ChildColumns.Gender).Value = ChildColumns.Expected[ChildColumns.Gender];
             t = FindTable(wb, ChildColumns.Expected.Count) ?? throw notFound;
+        }
+
+        // "kit entregue" became "realizado" (a Pix can be done too).
+        if (ColumnIndex(t, ChildColumns.Expected.Count, ChildColumns.OldDone) is var old and >= 0
+            && ColumnIndex(t, ChildColumns.Expected.Count, ChildColumns.Done) < 0)
+        {
+            t.Cell(t.HeaderRow, old).Value = ChildColumns.Done;
+            t.Headers[old] = ChildColumns.Done;
         }
         return t;
     }

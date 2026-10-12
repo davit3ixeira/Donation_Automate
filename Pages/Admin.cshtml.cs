@@ -3,24 +3,36 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DonationAutomate.Pages;
 
-public class AdminModel(SpreadsheetStore store, MailService mail, SiteSettingsStore siteSettings) : SheetPageModel(store)
+public class AdminModel(SpreadsheetStore store, MailService mail, RequestFlow flow, SiteSettingsStore siteSettings) : SheetPageModel(store)
 {
     public SheetData Children { get; private set; } = SheetData.Empty;
     public IReadOnlyList<SheetRow> FilteredRows { get; private set; } = [];
     public Dictionary<string, int> Counts { get; } = ChildStatus.All.ToDictionary(s => s, _ => 0);
     public SiteSettings SiteSettings { get; private set; } = new();
 
-    /// <summary>Optional status filter for the children table (null = all).</summary>
+    // Optional filters for the children table (null = all), combined.
+
+    /// <summary>Status: "available", "pending" or "approved".</summary>
     [BindProperty(SupportsGet = true)]
     public string? Filter { get; set; }
 
-    /// <summary>Optional gender filter for the children table: "M", "F" or null for all.</summary>
+    /// <summary>Donation: "kit" or "pix".</summary>
     [BindProperty(SupportsGet = true)]
-    public string? Genero { get; set; }
+    public string? Doacao { get; set; }
 
-    protected override object RouteValues => new { Filter, Genero };
+    /// <summary>Done: "sim" or "nao".</summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Realizado { get; set; }
 
-    public int GenderCount(string gender) => Children.Rows.Count(r => ChildGender.Of(r.Values[ChildColumns.Gender]) == gender);
+    protected override object RouteValues => new { Filter, Doacao, Realizado };
+
+    /// <summary>The current filters, for links and forms that should keep them.</summary>
+    public Dictionary<string, string> FilterRoute(string? filter = null, string? doacao = null, string? realizado = null) => new()
+    {
+        ["filter"] = filter ?? Filter ?? "",
+        ["doacao"] = doacao ?? Doacao ?? "",
+        ["realizado"] = realizado ?? Realizado ?? "",
+    };
 
     public SheetCard ChildrenCard => new("Planilha de crianças", "Children", "live-children-meta", Children,
         ChildColumns.ExpectedList, ConfirmReplace: true);
@@ -44,32 +56,74 @@ public class AdminModel(SpreadsheetStore store, MailService mail, SiteSettingsSt
             if (Counts.ContainsKey(status)) Counts[status]++;
         }
 
+        var donation = ChildDonation.Of(Doacao);
         FilteredRows = Children.Rows
             .Where(r => string.IsNullOrEmpty(Filter) || StatusOf(r) == ChildStatus.Of(Filter))
-            .Where(r => string.IsNullOrEmpty(Genero) || ChildGender.Of(r.Values[ChildColumns.Gender]) == ChildGender.Of(Genero))
+            .Where(r => string.IsNullOrEmpty(donation) || Children.Donation(r) == donation)
+            .Where(r => Realizado switch
+            {
+                "sim" => Children.Done(r),
+                "nao" => StatusOf(r) == ChildStatus.Approved && !Children.Done(r),
+                _ => true,
+            })
             .ToList();
     }
 
     public static string StatusOf(SheetRow row) => ChildStatus.Of(row.Values[ChildColumns.Status]);
 
-    public int KitsDelivered => Children.Rows.Count(r => StatusOf(r) == ChildStatus.Approved && Children.KitDelivered(r));
+    /// <summary>Whether the row has a donor (pending or approved), so a donation type applies.</summary>
+    public static bool HasDonor(SheetRow row) => StatusOf(row) is ChildStatus.Pending or ChildStatus.Approved;
 
-    /// <summary>Ticks or unticks "kit entregue" for an approved child. Called from the page's script; answers in JSON.</summary>
-    public IActionResult OnPostKit(string id, bool delivered)
+    public int DoneCount => Children.Rows.Count(r => StatusOf(r) == ChildStatus.Approved && Children.Done(r));
+    public int DonationCount(string donation) => Children.Rows.Count(r => HasDonor(r) && Children.Donation(r) == donation);
+
+    /// <summary>Ticks or unticks "realizado" for an approved child. Called from the page's script; answers in JSON.</summary>
+    public IActionResult OnPostDone(string id, bool done) => Json(() =>
+    {
+        Store.SetDone(id, done);
+        return done ? $"Criança nº {id} marcada como realizada." : $"Criança nº {id} desmarcada.";
+    });
+
+    /// <summary>Kit or Pix for a child with a donor. Called from the page's script; answers in JSON.</summary>
+    public IActionResult OnPostDonation(string id, string value) => Json(() =>
+    {
+        Store.SetDonation(id, value);
+        return $"Doação da criança nº {id}: {ChildDonation.Of(value)}.";
+    });
+
+    private IActionResult Json(Func<string> change)
     {
         try
         {
-            Store.SetKitDelivered(id, delivered);
-            return new JsonResult(new
-            {
-                message = delivered ? $"Kit da criança nº {id} marcado como entregue." : $"Kit da criança nº {id} desmarcado.",
-                version = Store.Version(),
-            });
+            var message = change();
+            return new JsonResult(new { message, version = Store.Version() });
         }
         catch (SpreadsheetException ex)
         {
             return new JsonResult(new { error = ex.Message }) { StatusCode = StatusCodes.Status400BadRequest };
         }
+    }
+
+    /// <summary>Emails the donor of this pending child the confirmation link (covering all their pending children).</summary>
+    public Task<IActionResult> OnPostSendConfirmationAsync(string id) =>
+        FlowAsync(() => flow.SendConfirmationAsync(id, mail.SiteUrlWithoutKey(Request)));
+
+    /// <summary>Confirms for the donor of this pending child, as if they had used the link (without telling the team).</summary>
+    public Task<IActionResult> OnPostConfirmAsync(string id) => FlowAsync(() => flow.ConfirmByAdminAsync(id));
+
+    private async Task<IActionResult> FlowAsync(Func<Task<FlowResult>> step)
+    {
+        try
+        {
+            var result = await step();
+            TempData["Message"] = result.Message;
+            if (result.Warning is not null) TempData["Error"] = result.Warning;
+        }
+        catch (Exception ex) when (ex is SpreadsheetException or EmailException)
+        {
+            TempData["Error"] = ex.Message;
+        }
+        return RedirectToPage(RouteValues);
     }
 
     public Task<IActionResult> OnPostUploadChildrenAsync(IFormFile? file) =>
@@ -117,8 +171,9 @@ public class AdminModel(SpreadsheetStore store, MailService mail, SiteSettingsSt
     }
 
     /// <summary>
-    /// Changes the status and, when a pending request is approved, emails the donor the approval
-    /// thank-you. A failed email doesn't undo the change; it comes back as a warning.
+    /// Changes the status from the dropdown. Approving a pending child this way confirms it for
+    /// that child alone and emails the donor the delivery instructions. A failed email doesn't undo
+    /// the change; it comes back as a warning.
     /// </summary>
     private async Task<(string Message, string? Warning)> ChangeStatusAsync(string id, string status)
     {
@@ -127,18 +182,23 @@ public class AdminModel(SpreadsheetStore store, MailService mail, SiteSettingsSt
         if (change.Previous != ChildStatus.Pending || change.Current != ChildStatus.Approved)
             return (message, null);
 
+        var sheet = Store.ReadChildren();
+        var row = sheet.Rows.FirstOrDefault(r => r.Key == id);
+        if (row is null) return (message, null);
+        var donor = new DonorChildren(row.Values[ChildColumns.DonorName].Trim(), row.Values[ChildColumns.DonorEmail].Trim(),
+            [new RequestedChild(row.Values, sheet.Donation(row))]);
         try
         {
-            var sent = await mail.SendApprovalAsync(change, mail.SiteUrl(Request));
+            var sent = await mail.SendApprovalAsync(donor);
             if (sent is null)
-                return (message, "O doador não tem nenhum e-mail válido na planilha, então o agradecimento não foi enviado.");
+                return (message, "O padrinho não tem nenhum e-mail válido na planilha, então as instruções de entrega não foram enviadas.");
             // The donor's cell may hold more than one address; Summary covers both and any partial failure.
-            var summary = sent.Summary("E-mail de agradecimento");
+            var summary = sent.Summary("Instruções de entrega");
             return sent.Failed.Count > 0 ? (message, summary) : ($"{message} {summary}", null);
         }
         catch (EmailException ex)
         {
-            return (message, $"O e-mail de agradecimento não foi enviado: {ex.Message}");
+            return (message, $"As instruções de entrega não foram enviadas: {ex.Message}");
         }
     }
 
@@ -161,10 +221,10 @@ public class AdminModel(SpreadsheetStore store, MailService mail, SiteSettingsSt
     public IActionResult OnPostDeleteRow(string id) =>
         Run(() => Store.DeleteChild(id), () => $"Criança nº {id} excluída.");
 
-    public IActionResult OnPostSiteSettings(string? kitsDeadline, string? festa)
+    public IActionResult OnPostSiteSettings(string? kitsDeadline, string? festa, string? pixValue, string? pixKey, string? deliveryAddress)
     {
-        siteSettings.Save(kitsDeadline, festa);
-        TempData["Message"] = "Datas do calendário atualizadas.";
+        siteSettings.Save(kitsDeadline, festa, pixValue, pixKey, deliveryAddress);
+        TempData["Message"] = "Configurações da campanha salvas.";
         return RedirectToPage(RouteValues);
     }
 }

@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace DonationAutomate.Pages;
 
-public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, IWebHostEnvironment env, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, MailService mail, IWebHostEnvironment env, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>One child as shown on a card, already formatted for reading.</summary>
     public sealed record ChildCard(
@@ -46,9 +46,13 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
     [StringLength(254, ErrorMessage = "E-mail muito longo.")]
     public string Email { get; set; } = "";
 
+    /// <summary>How the donor will help: the kit (the usual way) or, failing that, a Pix.</summary>
+    [BindProperty]
+    public string Donation { get; set; } = ChildDonation.Kit;
+
     /// <summary>Re-open the send dialog when the server rejected what was typed in it.</summary>
     public bool ReopenDialog =>
-        new[] { nameof(Name), nameof(Email) }.Any(k => ModelState[k]?.Errors.Count > 0);
+        new[] { nameof(Name), nameof(Email), nameof(Donation) }.Any(k => ModelState[k]?.Errors.Count > 0);
 
     public void OnGet()
     {
@@ -60,10 +64,12 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
     /// <summary>Polled by live.js to notice spreadsheet changes.</summary>
     public JsonResult OnGetVersion() => new(new { version = store.Version() });
 
-    public IActionResult OnPost()
+    public async Task<IActionResult> OnPostAsync()
     {
         if (Selected.Count == 0)
             ModelState.AddModelError(nameof(Selected), "Escolha pelo menos uma criança.");
+        if (ChildDonation.Of(Donation) is not { Length: > 0 })
+            ModelState.AddModelError(nameof(Donation), "Escolha entre kit e Pix.");
 
         if (!ModelState.IsValid)
         {
@@ -73,13 +79,14 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
 
         try
         {
-            var result = store.RequestChildren(Selected, Name.Trim(), Email.Trim());
+            var result = store.RequestChildren(Selected, Name.Trim(), Email.Trim(), Donation);
 
             if (result.Requested > 0)
             {
                 TempData["ThanksName"] = FirstWord(Pretty(Name));
                 TempData["ThanksCount"] = result.Requested.ToString();
                 AddToDonorList(Name.Trim(), Email.Trim());
+                await SendReceivedAsync(new DonorChildren(Name.Trim(), Email.Trim(), result.Children));
             }
             if (result.Unavailable > 0)
                 TempData["Error"] = result.Unavailable == 1
@@ -92,6 +99,24 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
         }
 
         return RedirectToPage(null, null, null, "obrigado");
+    }
+
+    /// <summary>
+    /// "Pedido recebido" to the donor. The request is saved by now and the team sees it in the
+    /// admin either way, so a failure here is only logged.
+    /// </summary>
+    private async Task SendReceivedAsync(DonorChildren donor)
+    {
+        try
+        {
+            var sent = await mail.SendRequestReceivedAsync(donor);
+            if (sent is { Failed.Count: > 0 })
+                logger.LogWarning("Request email not sent: {Summary}", sent.Summary("Pedido recebido"));
+        }
+        catch (EmailException ex)
+        {
+            logger.LogWarning("Request email not sent to {Email}: {Error}", donor.Email, ex.Message);
+        }
     }
 
     /// <summary>

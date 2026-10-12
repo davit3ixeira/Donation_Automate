@@ -36,18 +36,12 @@ public class EmailsModel(SpreadsheetStore store, MailService mail, EmailSettings
         }
     }
 
-    /// <summary>A template filled in with real numbers and a sample donor, as recipients will see it.</summary>
+    /// <summary>A campaign template filled in with real numbers and a sample donor, as recipients will see it.</summary>
     public EmailTemplate Preview(string key)
     {
         var template = Settings.Template(key);
         var name = Donors.FirstOrDefault(d => d.Name != "")?.Name ?? "Maria";
-        var values = key == TemplateKeys.Approval
-            ? new Dictionary<string, string>
-            {
-                ["nome"] = name, ["crianca"] = "Ana Souza", ["id"] = "12", ["turma"] = "Maternal I",
-                ["faixa"] = "2-3 anos", ["idade"] = "3 anos", ["calcado"] = "25", ["roupa"] = "4", ["link"] = Link,
-            }
-            : MailService.CampaignValues(Stats, name, Link);
+        var values = MailService.CampaignValues(Stats, name, Link);
         return new EmailTemplate(MailService.Fill(template.Subject, values), MailService.Fill(template.Body, values));
     }
 

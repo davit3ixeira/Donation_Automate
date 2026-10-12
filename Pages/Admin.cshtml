@@ -19,18 +19,30 @@
 
 <section class="cards">
     <div class="card">
-        <h2>Calendário do site</h2>
-        <p class="muted">Datas mostradas na página inicial, no bloco "Calendário".</p>
+        <h2>Configurações da campanha</h2>
+        <p class="muted">Datas do bloco "Calendário" da página inicial, valor médio do kit e como os padrinhos entregam a doação. Usados no site e nos e-mails.</p>
         <form method="post" asp-page-handler="SiteSettings">
             <div class="field">
-                <label for="kitsDeadline">Entrega dos Kits (até)</label>
+                <label for="kitsDeadline">Entrega dos Kits e Pix (até)</label>
                 <input type="date" id="kitsDeadline" name="kitsDeadline" value="@Model.SiteSettings.KitsDeadline.ToString("yyyy-MM-dd")" required>
             </div>
             <div class="field">
                 <label for="festa">Festa de Natal na Creche</label>
                 <input type="date" id="festa" name="festa" value="@Model.SiteSettings.Festa.ToString("yyyy-MM-dd")" required>
             </div>
-            <button class="btn btn-primary">Salvar datas</button>
+            <div class="field">
+                <label for="pixValue">Valor médio de um kit / Pix por criança (R$)</label>
+                <input type="number" id="pixValue" name="pixValue" min="1" step="1" value="@Model.SiteSettings.PixValue" required>
+            </div>
+            <div class="field">
+                <label for="deliveryAddress">Endereço de entrega dos kits</label>
+                <input id="deliveryAddress" name="deliveryAddress" value="@Model.SiteSettings.DeliveryAddress" placeholder="Rua, número, apartamento, aos cuidados de…">
+            </div>
+            <div class="field">
+                <label for="pixKey">Chave Pix</label>
+                <input id="pixKey" name="pixKey" value="@Model.SiteSettings.PixKey" autocomplete="off">
+            </div>
+            <button class="btn btn-primary">Salvar configurações</button>
         </form>
     </div>
     <partial name="_SheetCard" model="Model.ChildrenCard" />
@@ -40,49 +52,63 @@
 <div id="live-children" data-live>
     @if (!Model.Children.IsEmpty)
     {
-        var kitColumn = Model.Children.KitColumn;
-        <section>
+        // System columns shown as controls at the start of the row, not as text.
+        var doneColumn = Model.Children.DoneColumn;
+        var donationColumn = Model.Children.DonationColumn;
+        var sentColumn = Model.Children.ConfirmationSentColumn;
+        <section id="tabela">
             <div class="section-head">
                 <h2>
                     Doar
                     @if (Model.Counts[ChildStatus.Approved] > 0)
                     {
-                        <span class="kit-summary">🎁 @Model.KitsDelivered de @Model.Counts[ChildStatus.Approved] kits entregues</span>
+                        <span class="kit-summary">🎁 @Model.DoneCount de @Model.Counts[ChildStatus.Approved] realizados</span>
                     }
                 </h2>
                 <div class="section-actions">
-                    <nav class="filters" aria-label="Filtrar por status">
-                        <a asp-route-filter="" asp-route-genero="@Model.Genero" class="@(string.IsNullOrEmpty(Model.Filter) ? "active" : null)">
-                            Todas <span class="count">@Model.Children.Rows.Count</span>
-                        </a>
-                        @foreach (var s in ChildStatus.All)
-                        {
-                            <a asp-route-filter="@ChildStatus.CssClass(s)" asp-route-genero="@Model.Genero" class="@(Model.Filter == ChildStatus.CssClass(s) ? "active" : null)">
-                                @ChildStatus.Label(s) <span class="count">@Model.Counts[s]</span>
-                            </a>
-                        }
-                    </nav>
-                    @if (Model.GenderCount(ChildGender.Male) + Model.GenderCount(ChildGender.Female) > 0)
-                    {
-                        <nav class="filters" aria-label="Filtrar por gênero">
-                            <a asp-route-filter="@Model.Filter" asp-route-genero="" class="@(string.IsNullOrEmpty(Model.Genero) ? "active" : null)">Todos</a>
-                            @foreach (var g in new[] { ChildGender.Male, ChildGender.Female })
-                            {
-                                <a asp-route-filter="@Model.Filter" asp-route-genero="@g" class="@(ChildGender.Of(Model.Genero) == g ? "active" : null)">
-                                    @(g == ChildGender.Male ? "Meninos" : "Meninas") <span class="count">@Model.GenderCount(g)</span>
-                                </a>
-                            }
-                        </nav>
-                    }
+                    <a class="btn" asp-page-handler="DownloadChildren">⬇ Exportar planilha</a>
                     <form method="post" asp-page-handler="AddRow">
                         <button class="btn btn-primary">+ Adicionar criança</button>
                     </form>
                 </div>
             </div>
+            <div class="filter-rows">
+                <nav class="filters" aria-label="Filtrar por status">
+                    <a asp-all-route-data="Model.FilterRoute(filter: string.Empty)" class="@(string.IsNullOrEmpty(Model.Filter) ? "active" : null)">
+                        Todas <span class="count">@Model.Children.Rows.Count</span>
+                    </a>
+                    @foreach (var s in ChildStatus.All)
+                    {
+                        <a asp-all-route-data="Model.FilterRoute(filter: ChildStatus.CssClass(s))" class="@(Model.Filter == ChildStatus.CssClass(s) ? "active" : null)">
+                            @ChildStatus.Label(s) <span class="count">@Model.Counts[s]</span>
+                        </a>
+                    }
+                </nav>
+                <nav class="filters" aria-label="Filtrar por doação">
+                    <span class="filters-label">Doação</span>
+                    <a asp-all-route-data="Model.FilterRoute(doacao: string.Empty)" class="@(string.IsNullOrEmpty(Model.Doacao) ? "active" : null)">Todas</a>
+                    @foreach (var d in ChildDonation.All)
+                    {
+                        <a asp-all-route-data="Model.FilterRoute(doacao: d.ToLowerInvariant())" class="@(ChildDonation.Of(Model.Doacao) == d ? "active" : null)">
+                            @d <span class="count">@Model.DonationCount(d)</span>
+                        </a>
+                    }
+                </nav>
+                <nav class="filters" aria-label="Filtrar por realizado">
+                    <span class="filters-label">Realizado</span>
+                    <a asp-all-route-data="Model.FilterRoute(realizado: string.Empty)" class="@(string.IsNullOrEmpty(Model.Realizado) ? "active" : null)">Todos</a>
+                    <a asp-all-route-data='Model.FilterRoute(realizado: "sim")' class="@(Model.Realizado == "sim" ? "active" : null)">
+                        Sim <span class="count">@Model.DoneCount</span>
+                    </a>
+                    <a asp-all-route-data='Model.FilterRoute(realizado: "nao")' class="@(Model.Realizado == "nao" ? "active" : null)">
+                        Não <span class="count">@(Model.Counts[ChildStatus.Approved] - Model.DoneCount)</span>
+                    </a>
+                </nav>
+            </div>
 
             @if (Model.FilteredRows.Count == 0)
             {
-                <p class="empty">Nenhuma criança com este status.</p>
+                <p class="empty">Nenhuma criança com estes filtros.</p>
             }
             else
             {
@@ -90,10 +116,11 @@
                     <table class="data grid" id="children-grid">
                         <thead>
                             <tr>
-                                <th>Kit entregue</th>
+                                <th>Realizado</th>
+                                <th>Doação</th>
                                 @for (var i = 0; i < Model.Children.Headers.Count; i++)
                                 {
-                                    if (i == kitColumn) continue;
+                                    if (i == doneColumn || i == donationColumn || i == sentColumn) continue;
                                     <th>@Model.Children.Headers[i]</th>
                                 }
                                 <th><span class="visually-hidden">Ações</span></th>
@@ -104,15 +131,15 @@
                             {
                                 var current = AdminModel.StatusOf(row);
                                 var editable = row.Key != "";
+                                var donation = Model.Children.Donation(row);
                                 <tr id="@(editable ? $"row-{row.Key}" : null)" data-id="@row.Key">
                                     <td class="kit-cell">
                                         @if (editable && current == ChildStatus.Approved)
                                         {
                                             <label class="kit-toggle">
-                                                <input type="checkbox" class="kit-check" data-id="@row.Key"
-                                                       checked="@Model.Children.KitDelivered(row)" aria-label="Kit da criança nº @row.Key entregue">
+                                                <input type="checkbox" class="done-check" data-id="@row.Key"
+                                                       checked="@Model.Children.Done(row)" aria-label="Doação da criança nº @row.Key realizada">
                                                 <span class="kit-switch" aria-hidden="true"></span>
-                                                <span class="kit-label">Entregue</span>
                                             </label>
                                         }
                                         else
@@ -120,9 +147,28 @@
                                             <span class="muted" title="Só para pedidos aprovados">–</span>
                                         }
                                     </td>
+                                    <td>
+                                        @if (editable && AdminModel.HasDonor(row))
+                                        {
+                                            <select class="donation-select" data-id="@row.Key" aria-label="Doação da criança nº @row.Key">
+                                                @if (donation == "")
+                                                {
+                                                    <option value="" selected disabled>–</option>
+                                                }
+                                                @foreach (var d in ChildDonation.All)
+                                                {
+                                                    <option value="@d" selected="@(d == donation)">@d</option>
+                                                }
+                                            </select>
+                                        }
+                                        else
+                                        {
+                                            <span class="muted">–</span>
+                                        }
+                                    </td>
                                     @for (var i = 0; i < Model.Children.Headers.Count; i++)
                                     {
-                                        if (i == kitColumn) continue;  // shown as a checkbox below
+                                        if (i == doneColumn || i == donationColumn || i == sentColumn) continue;
                                         if (i != ChildColumns.Status || !editable)
                                         {
                                             if (editable)
@@ -137,7 +183,7 @@
                                         }
                                         <td>
                                             <div class="status-cell">
-                                                <form method="post" asp-page-handler="Status" asp-route-filter="@Model.Filter" asp-route-genero="@Model.Genero">
+                                                <form method="post" asp-page-handler="Status" asp-all-route-data="Model.FilterRoute()">
                                                     <input type="hidden" name="id" value="@row.Key">
                                                     <select name="status" class="status status-@ChildStatus.CssClass(current)" aria-label="Status">
                                                         @if (!ChildStatus.All.Contains(current))
@@ -151,12 +197,22 @@
                                                     </select>
                                                     <noscript><button class="btn btn-small">Salvar</button></noscript>
                                                 </form>
-                                                @if (current == ChildStatus.Pending)
+                                                @if (current == ChildStatus.Pending && !Model.Children.ConfirmationSent(row))
                                                 {
-                                                    <form method="post" asp-page-handler="Status" asp-route-filter="@Model.Filter" asp-route-genero="@Model.Genero" class="approve-form">
+                                                    <form method="post" asp-page-handler="SendConfirmation" asp-all-route-data="Model.FilterRoute()" class="flow-form">
                                                         <input type="hidden" name="id" value="@row.Key">
-                                                        <input type="hidden" name="status" value="@ChildStatus.CssClass(ChildStatus.Approved)">
-                                                        <button class="btn btn-small btn-approve">Aprovar</button>
+                                                        <button class="btn btn-small btn-approve" title="Envia ao padrinho o e-mail com o link para confirmar (todas as crianças pendentes dele)">Enviar e-mail de confirmação</button>
+                                                    </form>
+                                                }
+                                                else if (current == ChildStatus.Pending)
+                                                {
+                                                    <form method="post" asp-page-handler="Confirm" asp-all-route-data="Model.FilterRoute()" class="flow-form confirm-form">
+                                                        <input type="hidden" name="id" value="@row.Key">
+                                                        <button class="btn btn-small btn-approve" title="Confirma pelo padrinho (todas as crianças pendentes dele) e envia as instruções de entrega">Confirmar</button>
+                                                    </form>
+                                                    <form method="post" asp-page-handler="SendConfirmation" asp-all-route-data="Model.FilterRoute()" class="flow-form">
+                                                        <input type="hidden" name="id" value="@row.Key">
+                                                        <button class="btn-text" title="Envia de novo o e-mail com o link de confirmação">reenviar e-mail</button>
                                                     </form>
                                                 }
                                             </div>
@@ -165,7 +221,7 @@
                                     <td class="row-actions">
                                         @if (editable)
                                         {
-                                            <form method="post" asp-page-handler="DeleteRow" asp-route-filter="@Model.Filter" asp-route-genero="@Model.Genero" class="delete-form">
+                                            <form method="post" asp-page-handler="DeleteRow" asp-all-route-data="Model.FilterRoute()" class="delete-form">
                                                 <input type="hidden" name="id" value="@row.Key">
                                                 <button class="btn-icon" title="Excluir criança" aria-label="Excluir criança nº @row.Key">✕</button>
                                             </form>
@@ -288,39 +344,73 @@
                 if (select) changeStatus(select.closest('tr'), select.value);
             });
 
-            // "Kit entregue": saved as soon as it's ticked; put back if the save fails.
-            document.addEventListener('change', async e => {
-                const box = e.target.closest?.('#children-grid .kit-check');
-                if (!box) return;
+            // Posts one of the row controls (done switch, donation list) and refreshes the counts.
+            async function saveControl(handler, params) {
                 saving++;
-                box.disabled = true;
                 try {
-                    const res = await fetch('?handler=Kit', {
+                    const res = await fetch(`?handler=${handler}`, {
                         method: 'POST',
                         headers: { 'RequestVerificationToken': token },
-                        body: new URLSearchParams({ id: box.dataset.id, delivered: box.checked }),
+                        body: new URLSearchParams(params),
                     });
                     const data = await res.json().catch(() => ({}));
                     if (!res.ok || data.error) throw new Error(data.error || 'Não foi possível salvar. Tente novamente.');
                     main.dataset.sheetVersion = data.version;
                     toast(data.message);
+                    await Live.refresh();  // updates the counts and filters
+                } finally {
+                    saving--;
+                }
+            }
+
+            // "Realizado": saved as soon as it's switched; put back if the save fails.
+            document.addEventListener('change', async e => {
+                const box = e.target.closest?.('#children-grid .done-check');
+                if (!box) return;
+                box.disabled = true;
+                try {
+                    await saveControl('Done', { id: box.dataset.id, done: box.checked });
                     if (box.checked) Festive.replay(box.closest('.kit-toggle'), 'pop');
-                    await Live.refresh();  // updates the "kits entregues" count
                 } catch (err) {
                     box.checked = !box.checked;
                     toast(err.message, 'error');
                 } finally {
-                    saving--;
                     box.disabled = false;
                     box.blur();
                 }
             });
 
+            // "Doação": Kit or Pix, saved as soon as it's chosen.
+            document.addEventListener('change', async e => {
+                const select = e.target.closest?.('#children-grid .donation-select');
+                if (!select) return;
+                try {
+                    await saveControl('Donation', { id: select.dataset.id, value: select.value });
+                } catch (err) {
+                    toast(err.message, 'error');
+                    await Live.refresh();
+                }
+            });
+
+            // Filters and row buttons reload the page: come back to the same scroll position.
+            const scrollKey = 'admin-scroll';
+            const rememberScroll = () => { try { sessionStorage.setItem(scrollKey, String(scrollY)); } catch { } };
+            document.addEventListener('click', e => { if (e.target.closest?.('#tabela .filters a')) rememberScroll(); });
+            try {
+                const y = sessionStorage.getItem(scrollKey);
+                if (y !== null && !location.hash) {
+                    sessionStorage.removeItem(scrollKey);
+                    scrollTo(0, Number(y));
+                }
+            } catch { }
+
             document.addEventListener('submit', e => {
                 const form = e.target;
-                if (form.matches('#children-grid .approve-form')) {
-                    e.preventDefault();
-                    changeStatus(form.closest('tr'), 'approved');
+                if (form.closest('#tabela')) rememberScroll();
+                if (form.matches('#children-grid .confirm-form')) {
+                    const id = form.closest('tr').dataset.id;
+                    if (!confirm(`Confirmar pelo padrinho da criança nº ${id}? Todas as crianças pendentes dele passam para Aprovado e ele recebe as instruções de entrega.`))
+                        e.preventDefault();
                 } else if (form.matches('#children-grid .delete-form')) {
                     const name = form.closest('tr').querySelector(`td[data-col="${NAME_COL}"]`)?.textContent.trim();
                     const id = form.closest('tr').dataset.id;

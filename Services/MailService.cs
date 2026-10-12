@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -66,7 +67,7 @@ public sealed record SendResult(int Sent, IReadOnlyList<(string Email, string Er
 /// SMTP server. With no server configured, emails are written to data/outbox as .eml files
 /// (they open in Outlook or any mail program), so everything can be tried out safely.
 /// </summary>
-public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore settings, IConfiguration config, ILogger<MailService> logger)
+public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore settings, SiteSettingsStore site, IConfiguration config, ILogger<MailService> logger)
 {
     private sealed record Outgoing(string Name, string Email, string Subject, string Body);
 
@@ -150,8 +151,11 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
     /// The address used for {link}: the configured one, or the one the admin is browsing, with the
     /// access key that lets donors into the private site.
     /// </summary>
-    public string SiteUrl(HttpRequest request) =>
-        SiteAccess.Link(settings.Get().SiteUrl ?? $"{request.Scheme}://{request.Host}{request.PathBase}/", config);
+    public string SiteUrl(HttpRequest request) => SiteAccess.Link(SiteUrlWithoutKey(request), config);
+
+    /// <summary>The site's address alone, for links to pages that don't need the access key.</summary>
+    public string SiteUrlWithoutKey(HttpRequest request) =>
+        settings.Get().SiteUrl ?? $"{request.Scheme}://{request.Host}{request.PathBase}/";
 
     public static Dictionary<string, string> CampaignValues(CampaignStats stats, string name, string link) => new()
     {
@@ -165,18 +169,82 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
         ["aprovadas"] = stats.Approved.ToString(),
     };
 
-    public static Dictionary<string, string> ApprovalValues(IReadOnlyList<string> child, string link) => new()
+    private static readonly CultureInfo PtBr = new("pt-BR");
+
+    /// <summary>The values for a donor template (<see cref="TemplateKeys.Donor"/>).</summary>
+    public static Dictionary<string, string> DonorValues(DonorChildren donor, SiteSettings site, string confirmLink = "") => new()
     {
-        ["nome"] = Greeting(child[ChildColumns.DonorName]),
-        ["crianca"] = child[ChildColumns.Nome].Trim(),
-        ["id"] = child[ChildColumns.Id].Trim(),
-        ["turma"] = child[ChildColumns.Turma].Trim(),
-        ["faixa"] = child[ChildColumns.AgeGroup].Trim(),
-        ["idade"] = child[ChildColumns.Age].Trim(),
-        ["calcado"] = child[ChildColumns.Shoes].Trim(),
-        ["roupa"] = child[ChildColumns.Clothes].Trim(),
-        ["link"] = link,
+        ["nome"] = Greeting(donor.Name),
+        ["criancas"] = ChildrenText(donor.Children),
+        ["quantidade"] = donor.Children.Count == 1 ? "1 criança" : $"{donor.Children.Count} crianças",
+        ["doacao"] = DonationText(donor.Children),
+        ["prazo"] = Deadline(site),
+        ["instrucoes"] = Instructions(donor.Children, site),
+        ["link_confirmar"] = confirmLink,
     };
+
+    public static string Deadline(SiteSettings site) => site.KitsDeadline.ToString("d 'de' MMMM", PtBr);
+
+    /// <summary>One line per child: "- Ana Souza (nº 12): menina, Maternal I, 3 anos, calçado 25, roupa 4. Kit."</summary>
+    private static string ChildrenText(IEnumerable<RequestedChild> children) => string.Join("\n", children.Select(c =>
+    {
+        string Value(int column) => c.Values[column].Trim();
+        var details = new[]
+        {
+            ChildGender.Label(ChildGender.Of(Value(ChildColumns.Gender)) ?? "").ToLowerInvariant(),
+            Value(ChildColumns.Turma),
+            Value(ChildColumns.Age) switch
+            {
+                "" => Value(ChildColumns.AgeGroup),
+                "1" => "1 ano",
+                var age when age.All(char.IsDigit) => $"{age} anos",
+                var age => age,
+            },
+            Value(ChildColumns.Shoes) != "" ? $"calçado {Value(ChildColumns.Shoes)}" : "",
+            Value(ChildColumns.Clothes) != "" ? $"roupa {Value(ChildColumns.Clothes)}" : "",
+        }.Where(s => s != "");
+        var donation = c.Donation != "" ? $" {c.Donation}." : "";
+        return $"- {Value(ChildColumns.Nome)} (nº {Value(ChildColumns.Id)}): {string.Join(", ", details)}.{donation}";
+    }));
+
+    private static string DonationText(IReadOnlyList<RequestedChild> children)
+    {
+        var kit = children.Any(c => c.Donation != ChildDonation.Pix);
+        var pix = children.Any(c => c.Donation == ChildDonation.Pix);
+        return kit && pix ? "kit e Pix" : pix ? "Pix" : "kit";
+    }
+
+    /// <summary>How to deliver: the kit address and/or the Pix key, with the deadline, from the campaign settings.</summary>
+    private static string Instructions(IReadOnlyList<RequestedChild> children, SiteSettings site)
+    {
+        var kits = children.Where(c => c.Donation != ChildDonation.Pix).ToList();
+        var pix = children.Where(c => c.Donation == ChildDonation.Pix).ToList();
+        string Names(List<RequestedChild> list) => string.Join(", ", list.Select(c => c.Values[ChildColumns.Nome].Trim()));
+        var mixed = kits.Count > 0 && pix.Count > 0;
+        var parts = new List<string>();
+
+        if (kits.Count > 0)
+        {
+            var where = site.DeliveryAddress != "" ? $"no endereço: {site.DeliveryAddress}" : "no endereço que enviaremos em breve";
+            parts.Add($"""
+                {(mixed ? $"Kit ({Names(kits)})" : "Entrega do kit")}: compre roupa, calçado e brinquedo para {(kits.Count == 1 ? "a criança" : "cada criança")}, nos tamanhos indicados acima, e entregue até {Deadline(site)} {where}.
+                """);
+        }
+        if (pix.Count > 0)
+        {
+            var key = site.PixKey != "" ? $"para a chave Pix: {site.PixKey}" : "para a chave Pix que enviaremos em breve";
+            parts.Add($"""
+                {(mixed ? $"Pix ({Names(pix)})" : "Doação por Pix")}: faça o Pix até {Deadline(site)} {key}. O valor médio de um kit é de R$ {SiteSettingsStore.Money(site.PixValue)} por criança.
+                """);
+        }
+        return string.Join("\n\n", parts);
+    }
+
+    /// <summary>The valid addresses in a donor's email cell (it may hold more than one).</summary>
+    private static List<string> Addresses(string cell) => SpreadsheetStore.SplitEmails(cell)
+        .Where(SpreadsheetStore.LooksLikeEmail)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
 
     /// <summary>Replaces {placeholders}; unknown ones are left as typed so the mistake is visible.</summary>
     public static string Fill(string text, IReadOnlyDictionary<string, string> values) =>
@@ -229,25 +297,47 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
         return SendAndRecordAsync(messages, "Mensagem individual");
     }
 
-    /// <summary>
-    /// The approval thank-you, sent when a request goes from pending to approved, to every valid
-    /// address in the donor's cell. Null if none of them is valid.
-    /// </summary>
-    public async Task<SendResult?> SendApprovalAsync(StatusChange change, string link)
-    {
-        var addresses = SpreadsheetStore.SplitEmails(change.Values[ChildColumns.DonorEmail])
-            .Where(SpreadsheetStore.LooksLikeEmail)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (addresses.Count == 0) return null;
+    /// <summary>"Pedido recebido", right after the donor chooses on the site. Null if the donor's email isn't valid.</summary>
+    public Task<SendResult?> SendRequestReceivedAsync(DonorChildren donor) =>
+        SendToDonorAsync(donor, TemplateKeys.Received, "Pedido recebido");
 
-        var values = ApprovalValues(change.Values, link);
-        var template = settings.Get().Template(TemplateKeys.Approval);
+    /// <summary>"Confirme sua escolha", with the link the donor opens to confirm. Null if the donor's email isn't valid.</summary>
+    public Task<SendResult?> SendConfirmationRequestAsync(DonorChildren donor, string confirmLink) =>
+        SendToDonorAsync(donor, TemplateKeys.Confirmation, "Confirmação enviada", confirmLink);
+
+    /// <summary>The delivery instructions, once the choice is confirmed. Null if the donor's email isn't valid.</summary>
+    public Task<SendResult?> SendApprovalAsync(DonorChildren donor) =>
+        SendToDonorAsync(donor, TemplateKeys.Approval, "Instruções de entrega");
+
+    private async Task<SendResult?> SendToDonorAsync(DonorChildren donor, string templateKey, string label, string confirmLink = "")
+    {
+        var addresses = Addresses(donor.Email);
+        if (addresses.Count == 0 || donor.Children.Count == 0) return null;
+
+        var values = DonorValues(donor, site.Get(), confirmLink);
+        var template = settings.Get().Template(templateKey);
         var subject = Fill(template.Subject, values);
         var body = Fill(template.Body, values);
-        var name = change.Values[ChildColumns.DonorName].Trim();
-        var messages = addresses.Select(a => new Outgoing(name, a, subject, body)).ToList();
-        return await SendAndRecordAsync(messages, $"Aprovação: {values["crianca"]}");
+        var messages = addresses.Select(a => new Outgoing(donor.Name, a, subject, body)).ToList();
+        var children = string.Join(", ", donor.Children.Select(c => c.Values[ChildColumns.Nome].Trim()));
+        return await SendAndRecordAsync(messages, $"{label}: {children}");
+    }
+
+    /// <summary>Tells the team (Admin:Email) that a donor confirmed through the link. Not recorded in the donors sheet.</summary>
+    public Task<SendResult> SendDonorConfirmedNoticeAsync(DonorChildren donor)
+    {
+        var to = config["Admin:Email"]?.Trim();
+        if (string.IsNullOrEmpty(to))
+            throw new EmailException("Admin:Email não está configurado.");
+        var name = donor.Name != "" ? donor.Name : donor.Email;
+        return SendAsync([new Outgoing("", to, $"{name} confirmou o apadrinhamento",
+            $"""
+            {name} ({donor.Email}) confirmou pelo link a escolha de {(donor.Children.Count == 1 ? "1 criança" : $"{donor.Children.Count} crianças")}:
+
+            {ChildrenText(donor.Children)}
+
+            O status já está como Aprovado na administração, e o padrinho recebeu as instruções de entrega.
+            """)]);
     }
 
     /// <summary>The code for logging in to the staff area. Not recorded in the donors sheet.</summary>
