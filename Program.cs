@@ -25,6 +25,8 @@ builder.Services.AddSingleton<MailService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<LoginCodes>();
 builder.Services.AddSingleton<TrustedDevices>();
+builder.Services.AddSingleton<AdminPasswords>();
+builder.Services.AddSingleton<PasswordResets>();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -34,6 +36,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         // One admin, a code on each new browser: stay logged in while the site keeps being used.
         options.ExpireTimeSpan = TimeSpan.FromDays(365);
         options.SlidingExpiration = true;
+        // A changed password ends every session.
+        options.Events.OnValidatePrincipal = AdminSession.ValidateAsync;
     });
 builder.Services.AddAuthorization();
 

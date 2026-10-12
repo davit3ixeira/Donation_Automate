@@ -1,23 +1,18 @@
 using System.ComponentModel.DataAnnotations;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using DonationAutomate.Services;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace DonationAutomate.Pages;
 
 /// <summary>
-/// One admin account, set in configuration (Admin:Email and Admin:Password): environment variables
-/// Admin__Email / Admin__Password on the server, appsettings.Local.json on a development machine.
-/// The first time in a browser, after the password, a code is emailed to Admin:Email and must be
-/// typed in too (unless Admin:LoginCode is false); that browser is then trusted and not asked
-/// again. The login itself lasts a year while the site is used.
+/// One admin account: the email is set in configuration (Admin:Email), the password is created
+/// and reset through a link emailed to that address (see <see cref="AdminPasswords"/>). The first
+/// time in a browser, after the password, a code is emailed too (unless Admin:LoginCode is false);
+/// that browser is then trusted and not asked again. The login lasts a year while the site is used.
 /// </summary>
-public class LoginModel(IConfiguration config, LoginCodes codes, TrustedDevices devices, MailService mail, ILogger<LoginModel> logger) : PageModel
+public class LoginModel(IConfiguration config, AdminPasswords passwords, LoginCodes codes, TrustedDevices devices,
+    MailService mail, ILogger<LoginModel> logger) : PageModel
 {
     [BindProperty]
     [Display(Name = "E-mail")]
@@ -30,6 +25,9 @@ public class LoginModel(IConfiguration config, LoginCodes codes, TrustedDevices 
     public string Senha { get; set; } = "";
 
     public string? ReturnUrl { get; set; }
+
+    /// <summary>No password was created yet: the page points to the emailed link instead.</summary>
+    public bool NoPassword => !passwords.IsSet;
 
     /// <summary>Set once the password was right and a code was sent: the page then asks for the code.</summary>
     public string? Ticket { get; set; }
@@ -47,28 +45,30 @@ public class LoginModel(IConfiguration config, LoginCodes codes, TrustedDevices 
         ReturnUrl = returnUrl;
         if (!ModelState.IsValid) return Page();
 
-        var email = config["Admin:Email"];
-        var password = config["Admin:Password"];
-        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password))
+        var email = config["Admin:Email"]?.Trim();
+        if (string.IsNullOrEmpty(email))
         {
             ModelState.AddModelError(string.Empty, "O acesso da equipe ainda não foi configurado neste servidor.");
             return Page();
         }
-
-        if (!string.Equals(Usuario.Trim(), email.Trim(), StringComparison.OrdinalIgnoreCase)
-            || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(Senha), Encoding.UTF8.GetBytes(password)))
+        if (!passwords.IsSet)
+        {
+            ModelState.AddModelError(string.Empty, "Ainda não há senha. Use \"Criar senha\" abaixo para receber o link por e-mail.");
+            return Page();
+        }
+        if (!string.Equals(Usuario.Trim(), email, StringComparison.OrdinalIgnoreCase) || !passwords.Verify(Senha))
         {
             ModelState.AddModelError(string.Empty, "E-mail ou senha incorretos.");
             return Page();
         }
 
-        if (!config.GetValue("Admin:LoginCode", true) || devices.IsTrusted(HttpContext, email.Trim()))
-            return await SignInAsync(email.Trim());
+        if (!config.GetValue("Admin:LoginCode", true) || devices.IsTrusted(HttpContext, email, passwords.Stamp))
+            return await SignInAsync(email);
 
         var (ticket, code) = codes.Create();
         try
         {
-            var result = await mail.SendLoginCodeAsync(email.Trim(), code);
+            var result = await mail.SendLoginCodeAsync(email, code);
             if (result.Failed.Count > 0)
                 throw new EmailException(result.Failed[0].Error);
             CodeInOutbox = result.TestMode;
@@ -81,7 +81,7 @@ public class LoginModel(IConfiguration config, LoginCodes codes, TrustedDevices 
         }
 
         Ticket = ticket;
-        SentTo = email.Trim();
+        SentTo = email;
         return Page();
     }
 
@@ -95,7 +95,7 @@ public class LoginModel(IConfiguration config, LoginCodes codes, TrustedDevices 
         switch (codes.Check(ticket, code))
         {
             case CodeCheck.Ok:
-                devices.Trust(HttpContext, email);
+                devices.Trust(HttpContext, email, passwords.Stamp);
                 return await SignInAsync(email);
             case CodeCheck.Wrong:
                 Ticket = ticket;
@@ -110,11 +110,7 @@ public class LoginModel(IConfiguration config, LoginCodes codes, TrustedDevices 
 
     private async Task<IActionResult> SignInAsync(string email)
     {
-        var identity = new ClaimsIdentity(
-            [new Claim(ClaimTypes.Name, email)], CookieAuthenticationDefaults.AuthenticationScheme);
-        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity),
-            new AuthenticationProperties { IsPersistent = true });
-
+        await AdminSession.SignInAsync(HttpContext, email, passwords.Stamp);
         return Url.IsLocalUrl(ReturnUrl) ? LocalRedirect(ReturnUrl) : RedirectToPage("/Admin");
     }
 }

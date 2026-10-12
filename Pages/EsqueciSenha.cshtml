@@ -1,0 +1,51 @@
+@page
+@model EsqueciSenhaModel
+@{
+    ViewData["Title"] = Model.NoPassword ? "Criar senha" : "Esqueci a senha";
+}
+
+<div class="page-head">
+    <div>
+        <p class="eyebrow">Área da equipe</p>
+        <h1>@ViewData["Title"]</h1>
+        @if (Model.Sent)
+        {
+            <p class="muted">
+                Enviamos um link para <strong>@Model.Email</strong>. Abra o e-mail e siga o link para definir a senha.
+                Ele vale por 30 minutos. Se não chegar em alguns minutos, confira o spam.
+            </p>
+        }
+        else
+        {
+            <p class="muted">
+                Vamos enviar um link para <strong>@Model.Email</strong>, o e-mail da equipe.
+                Pelo link você define a senha@(Model.NoPassword ? "" : " nova; a atual continua valendo até lá").
+            </p>
+        }
+    </div>
+</div>
+
+<section class="cards">
+    <div class="card">
+        @if (Model.Sent)
+        {
+            @if (Model.InOutbox)
+            {
+                <p class="hint muted">Modo de teste: o e-mail com o link foi salvo em <code>data\outbox</code>.</p>
+            }
+            <div class="actions">
+                <a class="btn" asp-page="/Login">Voltar para o login</a>
+            </div>
+        }
+        else
+        {
+            <form method="post">
+                <div asp-validation-summary="ModelOnly" class="field-error"></div>
+                <div class="actions">
+                    <button type="submit" class="btn btn-primary">Enviar link por e-mail</button>
+                    <a class="btn" asp-page="/Login">Voltar</a>
+                </div>
+            </form>
+        }
+    </div>
+</section>

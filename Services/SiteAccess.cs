@@ -15,7 +15,8 @@ public static class SiteAccess
     private const string CookieName = "acesso";
 
     /// <summary>Pages that don't need the key (the staff pages have their own login).</summary>
-    private static readonly string[] OpenPaths = ["/Privado", "/Login", "/Logout", "/Admin", "/Emails", "/Error"];
+    private static readonly string[] OpenPaths =
+        ["/Privado", "/Login", "/Logout", "/EsqueciSenha", "/RedefinirSenha", "/Admin", "/Emails", "/Error"];
 
     public static string? Key(IConfiguration config) =>
         string.IsNullOrWhiteSpace(config["SiteAccessKey"]) ? null : config["SiteAccessKey"]!.Trim();

@@ -4,9 +4,10 @@ using Microsoft.AspNetCore.DataProtection;
 namespace DonationAutomate.Services;
 
 /// <summary>
-/// Browsers where the admin already typed an emailed login code. They get a signed cookie holding
-/// the admin email, valid for a year, and are not asked for a code again. Changing Admin:Email
-/// invalidates them all; logging out forgets the current one.
+/// Browsers where the admin already typed an emailed login code (or used an emailed password
+/// link). They get a signed cookie, valid for a year, and are not asked for a code again. It holds
+/// the admin email and the password stamp, so changing either forgets every browser; logging out
+/// forgets the current one.
 /// </summary>
 public sealed class TrustedDevices(IDataProtectionProvider protection)
 {
@@ -16,12 +17,15 @@ public sealed class TrustedDevices(IDataProtectionProvider protection)
     private readonly ITimeLimitedDataProtector _protector =
         protection.CreateProtector("DonationAutomate.TrustedDevice").ToTimeLimitedDataProtector();
 
-    public bool IsTrusted(HttpContext context, string email)
+    public bool IsTrusted(HttpContext context, string email, string passwordStamp)
     {
         if (context.Request.Cookies[CookieName] is not { Length: > 0 } value) return false;
         try
         {
-            return string.Equals(_protector.Unprotect(value), email, StringComparison.OrdinalIgnoreCase);
+            var parts = _protector.Unprotect(value).Split('|');
+            return parts.Length == 2
+                && string.Equals(parts[0], email, StringComparison.OrdinalIgnoreCase)
+                && parts[1] == passwordStamp;
         }
         catch (CryptographicException)
         {
@@ -29,8 +33,8 @@ public sealed class TrustedDevices(IDataProtectionProvider protection)
         }
     }
 
-    public void Trust(HttpContext context, string email) =>
-        context.Response.Cookies.Append(CookieName, _protector.Protect(email, Lifetime), new CookieOptions
+    public void Trust(HttpContext context, string email, string passwordStamp) =>
+        context.Response.Cookies.Append(CookieName, _protector.Protect($"{email}|{passwordStamp}", Lifetime), new CookieOptions
         {
             HttpOnly = true,
             Secure = context.Request.IsHttps,

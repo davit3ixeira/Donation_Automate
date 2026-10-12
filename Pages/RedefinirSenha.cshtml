@@ -1,0 +1,43 @@
+@page
+@model RedefinirSenhaModel
+@{
+    ViewData["Title"] = "Definir senha";
+}
+
+<div class="page-head">
+    <div>
+        <p class="eyebrow">Área da equipe</p>
+        <h1>Definir senha</h1>
+        @if (Model.ValidLink)
+        {
+            <p class="muted">Escolha a senha da área da equipe (pelo menos @AdminPasswords.MinLength caracteres). Ao salvar, todos os outros navegadores conectados são desconectados.</p>
+        }
+        else
+        {
+            <p class="muted">Este link expirou ou já foi usado. <a asp-page="/EsqueciSenha">Pedir um novo link</a>.</p>
+        }
+    </div>
+</div>
+
+@if (Model.ValidLink)
+{
+    <section class="cards">
+        <div class="card">
+            <form method="post">
+                <div asp-validation-summary="ModelOnly" class="field-error"></div>
+                <input type="hidden" name="token" value="@Model.Token">
+                <div class="field">
+                    <label for="password">Nova senha</label>
+                    <input id="password" name="password" type="password" required minlength="@AdminPasswords.MinLength" autocomplete="new-password" autofocus>
+                </div>
+                <div class="field">
+                    <label for="confirmation">Repita a senha</label>
+                    <input id="confirmation" name="confirmation" type="password" required minlength="@AdminPasswords.MinLength" autocomplete="new-password">
+                </div>
+                <div class="actions">
+                    <button type="submit" class="btn btn-primary">Salvar senha</button>
+                </div>
+            </form>
+        </div>
+    </section>
+}

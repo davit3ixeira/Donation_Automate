@@ -259,6 +259,19 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
             Ele vale por {LoginCodes.Lifetime.TotalMinutes:0} minutos. Se não foi você que tentou entrar, ignore esta mensagem e troque a senha do admin.
             """)]);
 
+    /// <summary>The link for creating or resetting the admin password. Not recorded in the donors sheet.</summary>
+    public Task<SendResult> SendPasswordLinkAsync(string to, string link) =>
+        SendAsync([new Outgoing("", to, "Criar ou redefinir a senha da área da equipe",
+            $"""
+            Para criar uma nova senha da área da equipe, abra o link abaixo:
+
+            {link}
+
+            Ele vale por {PasswordResets.Lifetime.TotalMinutes:0} minutos e só pode ser usado uma vez. Ao trocar a senha, todos os navegadores conectados são desconectados.
+
+            Se não foi você que pediu, ignore esta mensagem: a senha atual continua valendo.
+            """)]);
+
     private async Task<SendResult> SendAndRecordAsync(IReadOnlyList<Outgoing> messages, string label)
     {
         var result = await SendAsync(messages);

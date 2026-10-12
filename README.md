@@ -17,6 +17,8 @@ Then open http://localhost:5080.
 
 `/Admin` and `/Emails` require the admin login (see below): email and password, then, the first time in each browser, a 6-digit code emailed to `Admin:Email` (valid 10 minutes, 5 tries). That browser is then trusted for a year and only asks for email and password, and the login lasts a year while the site is used. **Sair** (logout) also forgets the browser, so the next login there asks for a code again. Without an email server (test mode), the code email is saved in `data/outbox`.
 
+The admin password is not in any configuration file. On the login page, **Criar senha** (when there is none yet) or **Esqueci a senha** emails a link to `Admin:Email`, valid 30 minutes and only once, where the password is set (at least 8 characters). It is stored only as a salted PBKDF2 hash in `data/admin.json`. Setting a new password logs out every browser and forgets every trusted one. At most one link is emailed every 2 minutes.
+
 The donor site is private when `SiteAccessKey` is set: it only opens through the link with the key (`https://doe-natal.com.br/?acesso=<key>`), which is what `{link}` in the emails contains and what `/Emails` shows for sharing. The browser remembers the key, so later visits work without it. Anyone else gets a page asking for the link. To cut off an old link, change the key (everyone then needs the new link). Search engines are told not to index the site.
 
 ## Configuration: login, email server and passwords
@@ -26,7 +28,6 @@ These settings are internal: they are not editable in the site, and they are nev
 | Setting | What it is | Required |
 |---|---|---|
 | `Admin:Email` | Admin login (an email address) | Yes. Without it nobody can log in. |
-| `Admin:Password` | Admin password | Yes |
 | `Admin:LoginCode` | `false` turns off the emailed login code (e.g. if email sending is broken) | No (default `true`) |
 | `Smtp:Host` | SMTP server (Amazon SES São Paulo: `email-smtp.sa-east-1.amazonaws.com`) | To send* |
 | `Smtp:Port` | SMTP port (`587`; `465` also works) | No (default `587`) |
@@ -50,7 +51,6 @@ The SES credentials come from the `.csv` downloaded when they were created (SES 
 
 ```
 Admin__Email=papainoel@doe-natal.com.br
-Admin__Password=...
 Smtp__Host=email-smtp.sa-east-1.amazonaws.com
 Smtp__Port=587
 Smtp__User=AKIA...

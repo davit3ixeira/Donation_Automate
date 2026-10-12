@@ -8,7 +8,11 @@
     <div>
         <p class="eyebrow">Área da equipe</p>
         <h1>Entrar</h1>
-        @if (Model.Ticket is null)
+        @if (Model.Ticket is null && Model.NoPassword)
+        {
+            <p class="muted">Primeiro acesso: ainda não há senha. <a asp-page="/EsqueciSenha">Criar senha</a> — enviaremos um link para o e-mail da equipe.</p>
+        }
+        else if (Model.Ticket is null)
         {
             <p class="muted">Informe o e-mail e a senha para acessar a administração e os e-mails.</p>
         }
@@ -37,6 +41,7 @@
                 </div>
                 <div class="actions">
                     <button type="submit" class="btn btn-primary">Entrar</button>
+                    <a class="btn" asp-page="/EsqueciSenha">@(Model.NoPassword ? "Criar senha" : "Esqueci a senha")</a>
                 </div>
             </form>
         }
