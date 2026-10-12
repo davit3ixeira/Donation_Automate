@@ -15,6 +15,9 @@ public static class SantaMartaIllustration
 
     private const double Width = 560, Height = 300;
 
+    /// <summary>Room above y = 0 for the glow around the Cristo, which would be cut off otherwise.</summary>
+    private const double TopMargin = 24;
+
     // The hill's outline: rises from the bottom left to its crest, then runs gently down to the right.
     private const double CrestX = 380, FootY = 280, Rise = 176;
 
@@ -43,7 +46,7 @@ public static class SantaMartaIllustration
         var rng = new Random(1958);
         var svg = new StringBuilder();
 
-        svg.Append($"""<svg class="santa-marta" viewBox="0 0 {F(Width)} {F(Height)}" role="img" aria-label="Ilustração do Morro Dona Marta, em Botafogo: casas subindo o morro, o plano inclinado e o Cristo Redentor no alto do Corcovado">""");
+        svg.Append($"""<svg class="santa-marta" viewBox="0 {F(-TopMargin)} {F(Width)} {F(Height + TopMargin)}" role="img" aria-label="Ilustração do Morro Dona Marta, em Botafogo: casas subindo o morro, o plano inclinado e o Cristo Redentor no alto do Corcovado">""");
         svg.Append("""<defs><radialGradient id="sm-cristo-glow"><stop offset="0" stop-color="#fff3d6" stop-opacity=".45"/><stop offset="1" stop-color="#f3cd7a" stop-opacity="0"/></radialGradient></defs>""");
 
         // Corcovado: a broad slope on the left, the rounded "hump" on top and a sheer face on the right

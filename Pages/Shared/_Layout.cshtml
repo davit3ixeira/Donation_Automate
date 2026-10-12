@@ -1,5 +1,8 @@
+@inject IConfiguration Config
 @{
     var page = ViewContext.RouteData.Values["page"] as string;
+    // The campaign's address (the sender of its emails), shown in the footer.
+    var contactEmail = Config["Smtp:FromAddress"];
 }
 <!doctype html>
 <html lang="pt-BR">
@@ -69,7 +72,10 @@
                 <strong>Obras Sociais Unidas de Santa Marta</strong>
                 Rua do Jabuti nº 9 (3ª parada do plano inclinado)<br>
                 Botafogo · Santa Marta · Rio de Janeiro<br>
-                natal-creche@doe-natal.com.br<br>
+                @if (!string.IsNullOrWhiteSpace(contactEmail))
+                {
+                    <a href="mailto:@contactEmail">@contactEmail</a><br>
+                }
             </address>
             <p class="footer-script">Juntos por um Natal<br>mais feliz! ♡</p>
         </div>

@@ -5,6 +5,8 @@ obj/
 
 # Admin login and SMTP credentials for this machine - never commit them.
 appsettings.Local.json
+# Copy of the production settings (/etc/doe-natal.env on the server) - passwords, never commit.
+*.env
 
 # Uploaded spreadsheets contain personal data about children - never commit them.
 data/

@@ -13,10 +13,11 @@ namespace DonationAutomate.Pages;
 /// <summary>
 /// One admin account, set in configuration (Admin:Email and Admin:Password): environment variables
 /// Admin__Email / Admin__Password on the server, appsettings.Local.json on a development machine.
-/// After the password, a code is emailed to Admin:Email and must be typed in too, unless
-/// Admin:LoginCode is false. The login is then remembered in that browser for 14 days.
+/// The first time in a browser, after the password, a code is emailed to Admin:Email and must be
+/// typed in too (unless Admin:LoginCode is false); that browser is then trusted and not asked
+/// again. The login itself lasts a year while the site is used.
 /// </summary>
-public class LoginModel(IConfiguration config, LoginCodes codes, MailService mail, ILogger<LoginModel> logger) : PageModel
+public class LoginModel(IConfiguration config, LoginCodes codes, TrustedDevices devices, MailService mail, ILogger<LoginModel> logger) : PageModel
 {
     [BindProperty]
     [Display(Name = "E-mail")]
@@ -61,7 +62,7 @@ public class LoginModel(IConfiguration config, LoginCodes codes, MailService mai
             return Page();
         }
 
-        if (!config.GetValue("Admin:LoginCode", true))
+        if (!config.GetValue("Admin:LoginCode", true) || devices.IsTrusted(HttpContext, email.Trim()))
             return await SignInAsync(email.Trim());
 
         var (ticket, code) = codes.Create();
@@ -94,6 +95,7 @@ public class LoginModel(IConfiguration config, LoginCodes codes, MailService mai
         switch (codes.Check(ticket, code))
         {
             case CodeCheck.Ok:
+                devices.Trust(HttpContext, email);
                 return await SignInAsync(email);
             case CodeCheck.Wrong:
                 Ticket = ticket;

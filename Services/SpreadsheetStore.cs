@@ -68,7 +68,7 @@ public static class ChildColumns
     public static readonly IReadOnlyList<string> Expected =
     [
         "id", "turma", "faixa etária", "nome da criança", "idade", "calçado", "roupa",
-        "nome do doador", "e-mail do doador", "telefone do doador", "data do pedido", "status",
+        "nome do doador", "e-mail do doador", "data do pedido", "status",
     ];
 
     // 0-based positions, counted from the table's first column.
@@ -81,15 +81,14 @@ public static class ChildColumns
     public const int Clothes = 6;
     public const int DonorName = 7;
     public const int DonorEmail = 8;
-    public const int DonorPhone = 9;
-    public const int RequestedAt = 10;
-    public const int Status = 11;
+    public const int RequestedAt = 9;
+    public const int Status = 10;
 
     /// <summary>The first columns, up to "roupa", describe the child. Users only ever see these.</summary>
     public const int PublicCount = 7;
 
     /// <summary>Filled in when someone requests the child; cleared when it becomes available again.</summary>
-    public static readonly IReadOnlyList<int> Donor = [DonorName, DonorEmail, DonorPhone, RequestedAt];
+    public static readonly IReadOnlyList<int> Donor = [DonorName, DonorEmail, RequestedAt];
 
     /// <summary>
     /// Appended by the system after the expected columns (found by name) the first time a kit is
@@ -264,7 +263,7 @@ public sealed class SpreadsheetStore
     }
 
     /// <summary>Marks the given children as pending for this donor. Skips any no longer available.</summary>
-    public RequestResult RequestChildren(IEnumerable<string> ids, string name, string email, string? phone)
+    public RequestResult RequestChildren(IEnumerable<string> ids, string name, string email)
     {
         lock (_gate)
         {
@@ -286,7 +285,6 @@ public sealed class SpreadsheetStore
                 t.Cell(row, ChildColumns.Status).Value = ChildStatus.Label(ChildStatus.Pending);
                 t.Cell(row, ChildColumns.DonorName).Value = name;
                 t.Cell(row, ChildColumns.DonorEmail).Value = email;
-                t.Cell(row, ChildColumns.DonorPhone).Value = phone ?? "";
                 var at = t.Cell(row, ChildColumns.RequestedAt);
                 at.Value = now;
                 at.Style.DateFormat.Format = "dd/mm/yyyy hh:mm";
@@ -620,11 +618,22 @@ public sealed class SpreadsheetStore
         return null;
     }
 
-    private static Table ChildrenTable(XLWorkbook wb) =>
-        FindTable(wb, ChildColumns.Expected.Count)
-        ?? throw new SpreadsheetException(
-            $"Não encontrei a tabela de crianças. Ela precisa de uma linha de cabeçalho com {ChildColumns.Expected.Count} " +
-            $"colunas preenchidas lado a lado, nesta ordem: {ChildColumns.ExpectedList}.");
+    private static Table ChildrenTable(XLWorkbook wb)
+    {
+        var t = FindTable(wb, ChildColumns.Expected.Count)
+            ?? throw new SpreadsheetException(
+                $"Não encontrei a tabela de crianças. Ela precisa de uma linha de cabeçalho com {ChildColumns.Expected.Count} " +
+                $"colunas preenchidas lado a lado, nesta ordem: {ChildColumns.ExpectedList}.");
+
+        // Older sheets had a "telefone do doador" column where the request date now is. Drop it, so
+        // they keep working; the file loses it the next time it is saved.
+        if (t.Headers.Count > ChildColumns.RequestedAt && TextFold.Fold(t.Headers[ChildColumns.RequestedAt]).Contains("telefone"))
+        {
+            t.Sheet.Column(t.FirstColumn + ChildColumns.RequestedAt).Delete();
+            t = FindTable(wb, ChildColumns.Expected.Count)!;
+        }
+        return t;
+    }
 
     private static SheetData Read(Table t, int contentColumns, int? keyIndex, DateTime lastModified)
     {
@@ -671,16 +680,126 @@ public sealed class SpreadsheetStore
         return rows;
     }
 
+    private const string HowToExport =
+        "No Google Sheets, baixe como Microsoft Excel (.xlsx) ou CSV: no computador, Arquivo → Fazer download; " +
+        "no celular, ⋮ → Compartilhar e exportar → Salvar como → Excel.";
+
+    /// <summary>
+    /// Reads an uploaded spreadsheet by its content, not its name (phones often send files without
+    /// an extension): an Excel workbook (.xlsx, which is also what Google Sheets downloads as Excel)
+    /// or a CSV (from Google Sheets or Excel), which is turned into a workbook.
+    /// </summary>
     private static XLWorkbook OpenUpload(Stream upload)
+    {
+        var ms = new MemoryStream();
+        upload.CopyTo(ms);
+        var bytes = ms.ToArray();
+
+        if (bytes.AsSpan().StartsWith("PK"u8))
+        {
+            if (IsOpenDocument(ms))
+                throw new SpreadsheetException($"Este arquivo está no formato OpenDocument (.ods), que o site não lê. {HowToExport}");
+            ms.Position = 0;
+            try
+            {
+                return new XLWorkbook(FixPictureIds(ms));
+            }
+            catch (Exception)
+            {
+                throw new SpreadsheetException($"Não foi possível ler o arquivo como planilha. {HowToExport}");
+            }
+        }
+        if (bytes.AsSpan().StartsWith(new byte[] { 0xD0, 0xCF, 0x11, 0xE0 }))
+            throw new SpreadsheetException("Este arquivo está no formato antigo do Excel (.xls). No Excel, use Salvar como → Pasta de Trabalho do Excel (.xlsx).");
+        if (bytes.AsSpan().StartsWith("%PDF"u8))
+            throw new SpreadsheetException($"Este arquivo é um PDF, não uma planilha. {HowToExport}");
+
+        return FromCsv(bytes)
+            ?? throw new SpreadsheetException($"Não foi possível ler o arquivo como planilha. Envie um arquivo do Excel (.xlsx) ou CSV. {HowToExport}");
+    }
+
+    /// <summary>An OpenDocument file (.ods) is a zip whose "mimetype" entry says so.</summary>
+    private static bool IsOpenDocument(MemoryStream zipBytes)
     {
         try
         {
-            return new XLWorkbook(FixPictureIds(upload));
+            zipBytes.Position = 0;
+            using var zip = new ZipArchive(zipBytes, ZipArchiveMode.Read, leaveOpen: true);
+            if (zip.GetEntry("mimetype") is not { } entry) return false;
+            using var reader = new StreamReader(entry.Open());
+            return reader.ReadToEnd().Contains("opendocument", StringComparison.OrdinalIgnoreCase);
         }
-        catch (Exception)
+        catch (InvalidDataException)
         {
-            throw new SpreadsheetException("Não foi possível ler o arquivo como planilha do Excel (.xlsx).");
+            return false;
         }
+    }
+
+    /// <summary>
+    /// A CSV file as a one-sheet workbook, every value as text. The separator (comma from Google
+    /// Sheets, semicolon from Excel in Portuguese, or tab) is the one the first line uses most.
+    /// Null if it doesn't look like text with columns.
+    /// </summary>
+    private static XLWorkbook? FromCsv(byte[] bytes)
+    {
+        string text;
+        try
+        {
+            text = new UTF8Encoding(false, throwOnInvalidBytes: true).GetString(bytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            text = Encoding.Latin1.GetString(bytes);  // Excel saves CSV in the Windows code page
+        }
+        text = text.TrimStart('﻿');
+        if (text.Contains('\0')) return null;
+
+        var firstLine = text.Split('\n', 2)[0];
+        var separator = new[] { ';', ',', '\t' }.MaxBy(c => firstLine.Count(x => x == c));
+        if (!firstLine.Contains(separator)) return null;
+
+        var rows = ParseCsv(text, separator);
+        var wb = new XLWorkbook();
+        var ws = wb.AddWorksheet("Planilha");
+        for (var r = 0; r < rows.Count; r++)
+            for (var c = 0; c < rows[r].Count; c++)
+                if (rows[r][c].Trim() is { Length: > 0 } value)
+                    ws.Cell(r + 1, c + 1).Value = value;
+        return wb;
+    }
+
+    /// <summary>CSV fields, with quoted values that may hold the separator, quotes ("") or line breaks.</summary>
+    private static List<List<string>> ParseCsv(string text, char separator)
+    {
+        var rows = new List<List<string>>();
+        var row = new List<string>();
+        var field = new StringBuilder();
+        var quoted = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (quoted)
+            {
+                if (c != '"') field.Append(c);
+                else if (i + 1 < text.Length && text[i + 1] == '"') { field.Append('"'); i++; }
+                else quoted = false;
+            }
+            else if (c == '"' && field.Length == 0) quoted = true;
+            else if (c == separator) { row.Add(field.ToString()); field.Clear(); }
+            else if (c is '\r' or '\n')
+            {
+                if (c == '\r' && i + 1 < text.Length && text[i + 1] == '\n') i++;
+                row.Add(field.ToString()); field.Clear();
+                rows.Add(row); row = [];
+            }
+            else field.Append(c);
+        }
+        if (field.Length > 0 || row.Count > 0)
+        {
+            row.Add(field.ToString());
+            rows.Add(row);
+        }
+        return rows;
     }
 
     private static XLWorkbook LoadExisting(string path)

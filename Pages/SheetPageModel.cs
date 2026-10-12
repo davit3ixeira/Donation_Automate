@@ -44,10 +44,6 @@ public abstract class SheetPageModel(SpreadsheetStore store) : PageModel
         {
             TempData["Error"] = "Escolha um arquivo para enviar.";
         }
-        else if (!Path.GetExtension(file.FileName).Equals(".xlsx", StringComparison.OrdinalIgnoreCase))
-        {
-            TempData["Error"] = "Somente arquivos .xlsx são aceitos. No Excel, use Salvar como → Pasta de Trabalho do Excel (.xlsx).";
-        }
         else
         {
             using var ms = new MemoryStream();

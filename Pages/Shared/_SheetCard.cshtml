@@ -20,10 +20,12 @@
 
     <form method="post" asp-page-handler="@("Upload" + Model.Handler)" enctype="multipart/form-data" class="upload"
           onsubmit="@(Model.ConfirmReplace && !Model.Data.IsEmpty ? "return confirm('Enviar uma nova planilha substitui todos os dados atuais, inclusive as alterações feitas pelo site. Continuar?')" : null)">
-        <input type="file" name="file" accept=".xlsx" required>
+        @* No accept filter: phones often grey out Google Drive files with it. The server checks the content. *@
+        <input type="file" name="file" required>
         <button class="btn btn-primary">Enviar</button>
     </form>
     <p class="hint muted">
+        Aceita Excel (.xlsx) e Google Sheets (baixado como Excel ou CSV).
         As alterações feitas pelo site são gravadas nesta planilha.
         @if (!Model.Data.IsEmpty)
         {

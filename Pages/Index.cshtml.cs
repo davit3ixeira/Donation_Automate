@@ -44,15 +44,9 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
     [StringLength(254, ErrorMessage = "E-mail muito longo.")]
     public string Email { get; set; } = "";
 
-    [BindProperty]
-    [Display(Name = "Telefone / WhatsApp")]
-    [Phone(ErrorMessage = "Informe um telefone válido.")]
-    [StringLength(30, ErrorMessage = "Telefone muito longo.")]
-    public string? Phone { get; set; }
-
     /// <summary>Re-open the send dialog when the server rejected what was typed in it.</summary>
     public bool ReopenDialog =>
-        new[] { nameof(Name), nameof(Email), nameof(Phone) }.Any(k => ModelState[k]?.Errors.Count > 0);
+        new[] { nameof(Name), nameof(Email) }.Any(k => ModelState[k]?.Errors.Count > 0);
 
     public void OnGet()
     {
@@ -77,8 +71,7 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
 
         try
         {
-            var phone = string.IsNullOrWhiteSpace(Phone) ? null : Phone.Trim();
-            var result = store.RequestChildren(Selected, Name.Trim(), Email.Trim(), phone);
+            var result = store.RequestChildren(Selected, Name.Trim(), Email.Trim());
 
             if (result.Requested > 0)
             {

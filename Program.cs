@@ -24,13 +24,15 @@ builder.Services.AddSingleton<SiteSettingsStore>();
 builder.Services.AddSingleton<MailService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<LoginCodes>();
+builder.Services.AddSingleton<TrustedDevices>();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
         options.LoginPath = "/Login";
         options.AccessDeniedPath = "/Login";
-        options.ExpireTimeSpan = TimeSpan.FromDays(14);
+        // One admin, a code on each new browser: stay logged in while the site keeps being used.
+        options.ExpireTimeSpan = TimeSpan.FromDays(365);
         options.SlidingExpiration = true;
     });
 builder.Services.AddAuthorization();
