@@ -66,7 +66,11 @@
                     }
                 </h2>
                 <div class="section-actions">
-                    <a class="btn" asp-page-handler="DownloadChildren">⬇ Exportar planilha</a>
+                    @* Exports what the table shows: the filtered rows, or everything without filters. *@
+                    <a class="btn" asp-page-handler="DownloadChildren" asp-all-route-data="Model.FilterRoute()"
+                       title="@(Model.IsFiltered ? "Baixa só as crianças que os filtros estão mostrando" : "Baixa a planilha completa")">
+                        ⬇ @(Model.IsFiltered ? $"Exportar filtradas ({Model.FilteredRows.Count})" : "Exportar planilha")
+                    </a>
                     <form method="post" asp-page-handler="AddRow">
                         <button class="btn btn-primary">+ Adicionar criança</button>
                     </form>
@@ -392,21 +396,40 @@
                 }
             });
 
-            // Filters and row buttons reload the page: come back to the same scroll position.
+            // Filters swap the table in place instead of loading a new page, so the screen stays put
+            // (phones especially). The address follows, so reloading or "back" keeps the filter.
+            document.addEventListener('click', async e => {
+                const link = e.target.closest?.('#tabela .filters a');
+                if (!link || e.ctrlKey || e.metaKey || e.shiftKey) return;
+                e.preventDefault();
+                const y = scrollY;
+                history.pushState(null, '', link.href);
+                try {
+                    await Live.refresh();
+                    scrollTo({ top: y, behavior: 'instant' });
+                } catch {
+                    location.href = link.href;  // fall back to a normal page load
+                }
+            });
+            addEventListener('popstate', () => Live.refresh().catch(() => location.reload()));
+
+            // Row buttons do reload the page: come back to the same place, without the smooth scroll
+            // (which phones interrupt while the page is still loading).
             const scrollKey = 'admin-scroll';
             const rememberScroll = () => { try { sessionStorage.setItem(scrollKey, String(scrollY)); } catch { } };
-            document.addEventListener('click', e => { if (e.target.closest?.('#tabela .filters a')) rememberScroll(); });
             try {
                 const y = sessionStorage.getItem(scrollKey);
+                sessionStorage.removeItem(scrollKey);
                 if (y !== null && !location.hash) {
-                    sessionStorage.removeItem(scrollKey);
-                    scrollTo(0, Number(y));
+                    const restore = () => scrollTo({ top: Number(y), behavior: 'instant' });
+                    restore();
+                    addEventListener('load', restore, { once: true });  // again once images and fonts are in
                 }
             } catch { }
 
             document.addEventListener('submit', e => {
                 const form = e.target;
-                if (form.closest('#tabela')) rememberScroll();
+                queueMicrotask(() => { if (!e.defaultPrevented && form.closest('#tabela')) rememberScroll(); });
                 if (form.matches('#children-grid .confirm-form')) {
                     const id = form.closest('tr').dataset.id;
                     if (!confirm(`Confirmar pelo padrinho da criança nº ${id}? Todas as crianças pendentes dele passam para Aprovado e ele recebe as instruções de entrega.`))

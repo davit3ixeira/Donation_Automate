@@ -46,13 +46,19 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
     [StringLength(254, ErrorMessage = "E-mail muito longo.")]
     public string Email { get; set; } = "";
 
+    /// <summary>The email typed a second time, so a typo doesn't send the confirmation link nowhere.</summary>
+    [BindProperty]
+    [Display(Name = "Confirme seu e-mail")]
+    [Required(ErrorMessage = "Digite o e-mail de novo para confirmar.")]
+    public string EmailConfirmation { get; set; } = "";
+
     /// <summary>How the donor will help: the kit (the usual way) or, failing that, a Pix.</summary>
     [BindProperty]
     public string Donation { get; set; } = ChildDonation.Kit;
 
     /// <summary>Re-open the send dialog when the server rejected what was typed in it.</summary>
     public bool ReopenDialog =>
-        new[] { nameof(Name), nameof(Email), nameof(Donation) }.Any(k => ModelState[k]?.Errors.Count > 0);
+        new[] { nameof(Name), nameof(Email), nameof(EmailConfirmation), nameof(Donation) }.Any(k => ModelState[k]?.Errors.Count > 0);
 
     public void OnGet()
     {
@@ -68,6 +74,10 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
     {
         if (Selected.Count == 0)
             ModelState.AddModelError(nameof(Selected), "Escolha pelo menos uma criança.");
+        // Blank fields arrive as null; [Required] reports those.
+        if (!string.IsNullOrWhiteSpace(EmailConfirmation)
+            && !SameEmail(Email, EmailConfirmation))
+            ModelState.AddModelError(nameof(EmailConfirmation), "Os dois e-mails não são iguais. Confira se não há erro de digitação.");
         if (ChildDonation.Of(Donation) is not { Length: > 0 })
             ModelState.AddModelError(nameof(Donation), "Escolha entre kit e Pix.");
 
@@ -100,6 +110,9 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
 
         return RedirectToPage(null, null, null, "obrigado");
     }
+
+    /// <summary>The same address typed twice, character for character (case and spaces count).</summary>
+    private static bool SameEmail(string? a, string? b) => string.Equals(a, b, StringComparison.Ordinal);
 
     /// <summary>
     /// "Confirme sua escolha", with the link, to the donor of this child (covering all their

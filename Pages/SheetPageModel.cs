@@ -11,7 +11,7 @@ public record SheetCard(string Title, string Handler, string MetaId, SheetData D
 /// <summary>Shared plumbing for pages that manage a spreadsheet: upload and download.</summary>
 public abstract class SheetPageModel(SpreadsheetStore store) : PageModel
 {
-    private const string XlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    protected const string XlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     protected SpreadsheetStore Store { get; } = store;
 

@@ -1,8 +1,11 @@
 @page
 @model IndexModel
 @using Microsoft.AspNetCore.Html
+@inject IConfiguration Config
 @{
     ViewData["Title"] = "Adote um sorriso";
+    // The campaign's address (the sender of its emails), for donors who need help.
+    var contact = Config["Smtp:FromAddress"];
     var stats = Model.Stats;
     var percent = stats.Total == 0 ? 0 : (int)Math.Round(stats.Chosen * 100.0 / stats.Total);
     var year = DateTime.Now.Year;
@@ -97,7 +100,13 @@
             Recebemos a sua escolha de @(Model.ThanksCount == 1 ? "1 criança" : $"{Model.ThanksCount} crianças").
             Falta só um passo: <strong>confirmar pelo link que enviamos para o seu e-mail</strong>.
         </p>
-        <p>Se o e-mail não aparecer em alguns minutos, confira a caixa de spam ou de promoções.</p>
+        <p>
+            Se o e-mail não aparecer em alguns minutos, confira a caixa de spam ou de promoções.
+            @if (!string.IsNullOrWhiteSpace(contact))
+            {
+                <text>Caso ainda não apareça, escreva para <a href="mailto:@contact">@contact</a>.</text>
+            }
+        </p>
         <a href="#criancas" class="btn">@Icon("plus", 18) Escolher mais uma criança</a>
     </section>
 }
@@ -418,6 +427,11 @@
             <input asp-for="Email" required autocomplete="email" placeholder="voce@exemplo.com">
             <span asp-validation-for="Email" class="field-error"></span>
         </div>
+        <div class="field">
+            <label asp-for="EmailConfirmation"></label>
+            <input asp-for="EmailConfirmation" type="email" required autocomplete="off" placeholder="Digite o e-mail de novo">
+            <span asp-validation-for="EmailConfirmation" class="field-error"></span>
+        </div>
 
         <div class="actions">
             <button type="button" class="btn btn-ghost" id="cancel-send">Voltar</button>
@@ -598,6 +612,17 @@
 
             document.getElementById('open-send').addEventListener('click', openDialog);
             document.getElementById('cancel-send').addEventListener('click', () => dialog.close());
+
+            // The email typed twice must be identical, character for character; the browser blocks sending until it is.
+            const email = form.querySelector('input[name="Email"]');
+            const emailAgain = form.querySelector('input[name="EmailConfirmation"]');
+            function checkEmails() {
+                const same = email.value === emailAgain.value;
+                emailAgain.setCustomValidity(!emailAgain.value || same ? '' : 'Os dois e-mails não são iguais. Confira se não há erro de digitação.');
+            }
+            email.addEventListener('input', checkEmails);
+            emailAgain.addEventListener('input', checkEmails);
+            emailAgain.addEventListener('blur', () => { checkEmails(); emailAgain.reportValidity(); });
 
             form.addEventListener('submit', e => {
                 if (chosen().length === 0) { e.preventDefault(); dialog.close(); return; }

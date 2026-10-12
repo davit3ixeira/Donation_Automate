@@ -276,6 +276,24 @@ public sealed class SpreadsheetStore
         }
     }
 
+    /// <summary>
+    /// The children spreadsheet with only these rows (by row number, as in <see cref="SheetRow.RowNumber"/>)
+    /// left in the table; everything else in the file is kept. For exporting what the admin filtered.
+    /// </summary>
+    public byte[] ExportChildren(IReadOnlySet<int> keepRows)
+    {
+        lock (_gate)
+        {
+            using var wb = LoadExisting(ChildrenPath);
+            var t = ChildrenTable(wb);
+            foreach (var row in ContentRows(t, ChildColumns.PublicCount).Where(r => !keepRows.Contains(r)).Reverse().ToList())
+                t.Sheet.Row(row).Delete();
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            return ms.ToArray();
+        }
+    }
+
     public byte[]? ReadBytes(string path)
     {
         lock (_gate)

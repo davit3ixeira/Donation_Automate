@@ -56,14 +56,21 @@ public class AdminModel(SpreadsheetStore store, MailService mail, RequestFlow fl
             if (Counts.ContainsKey(status)) Counts[status]++;
         }
 
+        FilteredRows = ApplyFilters(Children);
+    }
+
+    public bool IsFiltered => !string.IsNullOrEmpty(Filter) || !string.IsNullOrEmpty(Doacao) || !string.IsNullOrEmpty(Realizado);
+
+    private List<SheetRow> ApplyFilters(SheetData sheet)
+    {
         var donation = ChildDonation.Of(Doacao);
-        FilteredRows = Children.Rows
+        return sheet.Rows
             .Where(r => string.IsNullOrEmpty(Filter) || StatusOf(r) == ChildStatus.Of(Filter))
-            .Where(r => string.IsNullOrEmpty(donation) || Children.Donation(r) == donation)
+            .Where(r => string.IsNullOrEmpty(donation) || sheet.Donation(r) == donation)
             .Where(r => Realizado switch
             {
-                "sim" => Children.Done(r),
-                "nao" => StatusOf(r) == ChildStatus.Approved && !Children.Done(r),
+                "sim" => sheet.Done(r),
+                "nao" => StatusOf(r) == ChildStatus.Approved && !sheet.Done(r),
                 _ => true,
             })
             .ToList();
@@ -132,7 +139,24 @@ public class AdminModel(SpreadsheetStore store, MailService mail, RequestFlow fl
     public IActionResult OnPostRemoveChildren() =>
         Run(Store.RemoveChildren, () => "Planilha de crianças removida. Envie outra quando quiser.");
 
-    public IActionResult OnGetDownloadChildren() => Download(Store.ChildrenPath, "criancas.xlsx");
+    /// <summary>The children spreadsheet; with filters in the address, only the rows they let through.</summary>
+    public IActionResult OnGetDownloadChildren()
+    {
+        if (!IsFiltered) return Download(Store.ChildrenPath, "criancas.xlsx");
+        try
+        {
+            var rows = ApplyFilters(Store.ReadChildren()).Select(r => r.RowNumber).ToHashSet();
+            var status = string.IsNullOrEmpty(Filter) ? null : TextFold.Fold(ChildStatus.Of(Filter));
+            var name = string.Join("-", new[] { status, Doacao, Realizado is { Length: > 0 } r ? $"realizado-{r}" : null }
+                .Where(s => !string.IsNullOrEmpty(s)));
+            return File(Store.ExportChildren(rows), XlsxContentType, $"criancas-{name}.xlsx");
+        }
+        catch (SpreadsheetException ex)
+        {
+            TempData["Error"] = ex.Message;
+            return RedirectToPage(RouteValues);
+        }
+    }
 
     /// <summary>Status change from the no-script form.</summary>
     public async Task<IActionResult> OnPostStatusAsync(string id, string status)
