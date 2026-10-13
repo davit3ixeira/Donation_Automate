@@ -157,6 +157,12 @@ strong { color: var(--cream); }
 .site-footer address { font-style: normal; border-left: 1px solid rgba(255, 255, 255, 0.25); padding-left: 24px; line-height: 1.6; }
 .site-footer address strong { display: block; color: #fff; }
 .site-footer address a { color: #fff; }
+.copy-email {
+    margin-left: 6px; padding: 1px 8px; border-radius: 999px; cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.45); background: transparent; color: #fff;
+    font: inherit; font-size: 0.75rem; font-weight: 700; vertical-align: 1px;
+}
+.copy-email:hover { background: rgba(255, 255, 255, 0.12); }
 .footer-script { font-family: var(--font-hand); font-weight: 700; font-size: 1.7rem; line-height: 1; color: #fff; margin: 0; transform: rotate(-6deg); }
 
 /* ------------------------------------------------------------------ Buttons */

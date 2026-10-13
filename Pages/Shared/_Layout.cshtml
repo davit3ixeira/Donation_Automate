@@ -74,7 +74,9 @@
                 Botafogo · Santa Marta · Rio de Janeiro<br>
                 @if (!string.IsNullOrWhiteSpace(contactEmail))
                 {
-                    <a href="mailto:@contactEmail">@contactEmail</a><br>
+                    @* "Copiar" too: the mailto link depends on a mail app being set up on the device. *@
+                    <a href="mailto:@contactEmail">@contactEmail</a>
+                    <button type="button" class="copy-email" data-copy="@contactEmail">copiar</button><br>
                 }
             </address>
             <p class="footer-script">Juntos por um Natal<br>mais feliz! ♡</p>
@@ -83,6 +85,20 @@
 
     <script src="~/js/live.js" asp-append-version="true"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script>
+        // "Copiar" next to an address: to paste into any webmail when the device has no mail app set up.
+        document.addEventListener('click', async e => {
+            const btn = e.target.closest?.('[data-copy]');
+            if (!btn) return;
+            try {
+                await navigator.clipboard.writeText(btn.dataset.copy);
+                btn.textContent = 'copiado!';
+            } catch {
+                prompt('Copie o e-mail:', btn.dataset.copy);  // no clipboard access (e.g. outside HTTPS)
+            }
+            setTimeout(() => btn.textContent = 'copiar', 2000);
+        });
+    </script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

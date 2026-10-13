@@ -181,7 +181,7 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
         ["quantidade"] = donor.Children.Count == 1 ? "1 criança" : $"{donor.Children.Count} crianças",
         ["doacao"] = DonationText(donor.Children),
         ["prazo"] = Deadline(site),
-        ["instrucoes"] = Instructions(donor.Children, site),
+        ["instrucoes"] = Instructions(donor.Children, site, contact),
         ["link_confirmar"] = confirmLink,
     };
 
@@ -217,7 +217,7 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
     }
 
     /// <summary>How to deliver: the kit address and/or the Pix key, with the deadline, from the campaign settings.</summary>
-    private static string Instructions(IReadOnlyList<RequestedChild> children, SiteSettings site)
+    private static string Instructions(IReadOnlyList<RequestedChild> children, SiteSettings site, string contact)
     {
         var kits = children.Where(c => c.Donation != ChildDonation.Pix).ToList();
         var pix = children.Where(c => c.Donation == ChildDonation.Pix).ToList();
@@ -235,8 +235,9 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
         if (pix.Count > 0)
         {
             var key = site.PixKey != "" ? $"para a chave Pix: {site.PixKey}" : "para a chave Pix que enviaremos em breve";
+            var receipt = contact != "" ? $" e envie o comprovante para {contact}" : "";
             parts.Add($"""
-                {(mixed ? $"Pix ({Names(pix)})" : "Doação por Pix")}: faça o Pix até {Deadline(site)} {key}. O valor médio de um kit é de R$ {SiteSettingsStore.Money(site.PixValue)} por criança.
+                {(mixed ? $"Pix ({Names(pix)})" : "Doação por Pix")}: faça o Pix até {Deadline(site)} {key}{receipt}. Para referência, o valor médio de um kit é de R$ {SiteSettingsStore.Money(site.PixValue)} por criança.
                 """);
         }
         return string.Join("\n\n", parts);
