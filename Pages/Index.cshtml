@@ -495,7 +495,7 @@
                     ? `${names.slice(0, 3).join(', ')} e mais ${names.length - 3}`
                     : names.join(', ');
                 document.getElementById('bag-value').textContent = n === 0 ? ''
-                    : `Kits em média ${money(kitValue)};
+                    : `Valor médio por kit: ${money(kitValue)}`;
                 if (bump) Festive.replay(document.getElementById('bag-icon'), 'bump');
             }
 
