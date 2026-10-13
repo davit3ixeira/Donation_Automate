@@ -95,14 +95,53 @@
 
 @* ---------------------------------------------------------------- Donor list *@
 <div id="live-donors" data-live>
+    <span id="doadores"></span>
     <section>
         <div class="section-head">
             <h2>Doadores</h2>
-            <span class="muted">@Model.Donors.Count na lista</span>
+            <div class="section-actions">
+                <span class="muted">@(Model.IsFiltered ? $"{Model.FilteredDonors.Count} de {Model.Donors.Count}" : $"{Model.Donors.Count}") na lista</span>
+                @if (Model.Donors.Count > 0)
+                {
+                    @* Exports what the table shows: the filtered rows, with the computed columns. *@
+                    <a class="btn" asp-page-handler="ExportDonors" asp-all-route-data="Model.FilterRoute()">
+                        ⬇ @(Model.IsFiltered ? $"Exportar filtrados ({Model.FilteredDonors.Count})" : "Exportar lista")
+                    </a>
+                }
+            </div>
         </div>
+        @if (Model.Donors.Count > 0)
+        {
+            <div class="filter-rows">
+                <nav class="filters" aria-label="Filtrar por situação">
+                    <span class="filters-label">Situação</span>
+                    <a asp-all-route-data="Model.FilterRoute(situacao: string.Empty)" class="@(string.IsNullOrEmpty(Model.Situacao) ? "active" : null)">Todos</a>
+                    @foreach (var (value, label) in EmailsModel.Situations)
+                    {
+                        <a asp-all-route-data="Model.FilterRoute(situacao: value)" class="@(Model.Situacao == value ? "active" : null)">
+                            @label <span class="count">@Model.Donors.Count(d => d.SituationClass == value)</span>
+                        </a>
+                    }
+                </nav>
+                <nav class="filters" aria-label="Filtrar por origem">
+                    <span class="filters-label">Origem</span>
+                    <a asp-all-route-data="Model.FilterRoute(origem: string.Empty)" class="@(string.IsNullOrEmpty(Model.Origem) ? "active" : null)">Todas</a>
+                    @foreach (var (value, label) in EmailsModel.Origins)
+                    {
+                        <a asp-all-route-data="Model.FilterRoute(origem: value)" class="@(Model.Origem == value ? "active" : null)">
+                            @label <span class="count">@Model.Donors.Count(d => TextFold.Fold(EmailsModel.OriginOf(d)) == value)</span>
+                        </a>
+                    }
+                </nav>
+            </div>
+        }
         @if (Model.Donors.Count == 0)
         {
             <p class="empty">Nenhum doador ainda. Envie a planilha de doadores acima. Quem pedir crianças pelo site entra na lista automaticamente.</p>
+        }
+        else if (Model.FilteredDonors.Count == 0)
+        {
+            <p class="empty">Nenhum doador com estes filtros.</p>
         }
         else
         {
@@ -121,7 +160,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var d in Model.Donors)
+                        @foreach (var d in Model.FilteredDonors)
                         {
                             <tr>
                                 <td>@d.Name</td>
@@ -137,6 +176,12 @@
                                         <button type="button" class="btn-icon write-to" data-name="@d.Name" data-email="@d.Email"
                                                 title="Escrever para @d.Email" aria-label="Escrever para @d.Email">✉</button>
                                     }
+                                    <form method="post" asp-page-handler="DeleteDonor" asp-all-route-data="Model.FilterRoute()" class="delete-donor-form" data-label="@(d.Name != "" ? d.Name : d.Email)">
+                                        <input type="hidden" name="row" value="@d.RowNumber">
+                                        <input type="hidden" name="email" value="@d.Email">
+                                        <input type="hidden" name="name" value="@d.Name">
+                                        <button class="btn-icon" title="Excluir da lista" aria-label="Excluir @(d.Name != "" ? d.Name : d.Email) da lista">✕</button>
+                                    </form>
                                 </td>
                             </tr>
                         }
@@ -237,6 +282,30 @@
                 else { sendBtn.disabled = true; sendBtn.textContent = 'Enviando…'; }
             });
             updateSendAll();
+
+            // Filters swap the donor table in place instead of loading a new page, so the screen stays
+            // put. The address follows, so reloading or "back" keeps the filter.
+            document.addEventListener('click', async e => {
+                const link = e.target.closest?.('#live-donors .filters a');
+                if (!link || e.ctrlKey || e.metaKey || e.shiftKey) return;
+                e.preventDefault();
+                const y = scrollY;
+                history.pushState(null, '', link.href);
+                try {
+                    await Live.refresh();
+                    scrollTo({ top: y, behavior: 'instant' });
+                } catch {
+                    location.href = link.href;
+                }
+            });
+            addEventListener('popstate', () => Live.refresh().catch(() => location.reload()));
+
+            // Deleting a donor asks first; the children they chose stay as they are.
+            document.addEventListener('submit', e => {
+                const form = e.target.closest?.('.delete-donor-form');
+                if (form && !confirm(`Excluir ${form.dataset.label} da lista de doadores? A linha é apagada da planilha de doadores. As crianças que essa pessoa escolheu não mudam.`))
+                    e.preventDefault();
+            });
 
             // Write to one person: free text, nothing pre-filled.
             const dialog = document.getElementById('write-dialog');

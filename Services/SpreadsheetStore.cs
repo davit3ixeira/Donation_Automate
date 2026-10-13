@@ -655,6 +655,26 @@ public sealed class SpreadsheetStore
     /// Adds a donor to the emails sheet unless their email is already in it (creating the sheet
     /// if there is none yet). Returns whether they were added.
     /// </summary>
+    /// <summary>
+    /// Deletes a donor's row from the emails sheet. The row must still hold the same email cell as
+    /// shown on the page, so a sheet that changed meanwhile doesn't lose the wrong person. The
+    /// children they asked for are not touched.
+    /// </summary>
+    public void DeleteDonor(int rowNumber, string emailCell)
+    {
+        lock (_gate)
+        {
+            using var wb = LoadExisting(EmailsPath);
+            var t = EmailsTable(wb);
+            if (!ContentRows(t, EmailColumns.Expected.Count).Contains(rowNumber)
+                || Text(t.Cell(rowNumber, EmailColumns.Email)) != emailCell.Trim())
+                throw new SpreadsheetException("Este doador não está mais nessa linha da planilha. Recarregue a página e tente de novo.");
+
+            t.Sheet.Row(rowNumber).Delete();
+            Save(wb, EmailsPath);
+        }
+    }
+
     public bool EnsureDonor(string name, string email)
     {
         lock (_gate)

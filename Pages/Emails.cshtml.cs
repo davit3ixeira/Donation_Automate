@@ -1,3 +1,4 @@
+using ClosedXML.Excel;
 using DonationAutomate.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,6 +16,37 @@ public class EmailsModel(SpreadsheetStore store, MailService mail, EmailSettings
 
     public int AudienceCount(Audience audience) => MailService.Select(Donors, audience).Count;
 
+    // Optional filters for the donor table (null = all), combined. Sending to everyone ignores them.
+
+    /// <summary>Situation: "none" (ainda não doou), "pending" (aguardando) or "approved" (confirmada), as in <see cref="Donor.SituationClass"/>.</summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Situacao { get; set; }
+
+    /// <summary>Origin: "planilha" or "site".</summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Origem { get; set; }
+
+    public IReadOnlyList<Donor> FilteredDonors { get; private set; } = [];
+    public bool IsFiltered => !string.IsNullOrEmpty(Situacao) || !string.IsNullOrEmpty(Origem);
+
+    public static readonly IReadOnlyList<(string Value, string Label)> Situations =
+        [("none", "Ainda não doou"), ("pending", "Aguardando"), ("approved", "Confirmada")];
+    public static readonly IReadOnlyList<(string Value, string Label)> Origins = [("planilha", "Planilha"), ("site", "Site")];
+
+    public static string OriginOf(Donor d) => d.Origin == "" ? "Planilha" : d.Origin;
+
+    /// <summary>The current filters, for links and forms that should keep them.</summary>
+    public Dictionary<string, string> FilterRoute(string? situacao = null, string? origem = null) => new()
+    {
+        ["situacao"] = situacao ?? Situacao ?? "",
+        ["origem"] = origem ?? Origem ?? "",
+    };
+
+    private List<Donor> ApplyFilters(IEnumerable<Donor> donors) => donors
+        .Where(d => string.IsNullOrEmpty(Situacao) || d.SituationClass == Situacao)
+        .Where(d => string.IsNullOrEmpty(Origem) || TextFold.Fold(OriginOf(d)) == Origem)
+        .ToList();
+
     public SheetCard EmailsCard => new("Planilha de doadores", "Emails", "live-emails-meta", Emails,
         $"{EmailColumns.ExpectedList} (o sistema acrescenta \"{EmailColumns.Origin}\" e \"{EmailColumns.LastEmail}\")", ConfirmReplace: true);
 
@@ -29,6 +61,7 @@ public class EmailsModel(SpreadsheetStore store, MailService mail, EmailSettings
             var children = Store.ReadChildren();
             Stats = MailService.Stats(children);
             Donors = MailService.Donors(Emails, children);
+            FilteredDonors = ApplyFilters(Donors);
         }
         catch (SpreadsheetException ex)
         {
@@ -52,6 +85,69 @@ public class EmailsModel(SpreadsheetStore store, MailService mail, EmailSettings
         Run(Store.RemoveEmails, () => "Planilha de doadores removida. Envie outra quando quiser.");
 
     public IActionResult OnGetDownloadEmails() => Download(Store.EmailsPath, "doadores.xlsx");
+
+    /// <summary>Deletes a donor's row from the donors sheet; back to the list, where the button was.</summary>
+    public IActionResult OnPostDeleteDonor(int row, string email, string? name)
+    {
+        try
+        {
+            Store.DeleteDonor(row, email ?? "");
+            TempData["Message"] = $"{(string.IsNullOrWhiteSpace(name) ? email : name)} excluído(a) da lista de doadores.";
+        }
+        catch (SpreadsheetException ex)
+        {
+            TempData["Error"] = ex.Message;
+        }
+        return RedirectToPage(null, null, new { Situacao, Origem }, "doadores");
+    }
+
+    /// <summary>The donor table as shown on the page (filters applied, with the computed columns), as a spreadsheet.</summary>
+    public IActionResult OnGetExportDonors()
+    {
+        try
+        {
+            var donors = ApplyFilters(MailService.Donors(Store.ReadEmails(), Store.ReadChildren()));
+            using var wb = new XLWorkbook();
+            var ws = wb.AddWorksheet("Doadores");
+            string[] headers =
+                ["Nome", "E-mail", "Situação", "Aguardando", "Crianças aguardando", "Aprovadas", "Crianças aprovadas", "Origem", "Último e-mail"];
+            double[] widths = [28, 34, 22, 12, 40, 12, 40, 12, 40];
+            for (var c = 0; c < headers.Length; c++)
+            {
+                ws.Cell(1, c + 1).Value = headers[c];
+                ws.Column(c + 1).Width = widths[c];
+            }
+            ws.Row(1).Style.Font.Bold = true;
+
+            var r = 2;
+            foreach (var d in donors)
+            {
+                ws.Cell(r, 1).Value = d.Name;
+                ws.Cell(r, 2).Value = d.Email;
+                ws.Cell(r, 3).Value = d.Situation;
+                ws.Cell(r, 4).Value = d.Pending.Count;
+                ws.Cell(r, 5).Value = string.Join(", ", d.Pending);
+                ws.Cell(r, 6).Value = d.Approved.Count;
+                ws.Cell(r, 7).Value = string.Join(", ", d.Approved);
+                ws.Cell(r, 8).Value = OriginOf(d);
+                ws.Cell(r, 9).Value = d.LastEmail;
+                r++;
+            }
+            ws.SheetView.FreezeRows(1);
+
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            var situation = Situations.FirstOrDefault(s => s.Value == Situacao).Label;
+            var name = string.Join("-", new[] { situation is null ? null : TextFold.Fold(situation).Replace(' ', '-'), Origem }
+                .Where(s => !string.IsNullOrEmpty(s)));
+            return File(ms.ToArray(), XlsxContentType, name == "" ? "doadores.xlsx" : $"doadores-{name}.xlsx");
+        }
+        catch (SpreadsheetException ex)
+        {
+            TempData["Error"] = ex.Message;
+            return RedirectToPage(null, null, new { Situacao, Origem }, "doadores");
+        }
+    }
 
     public Task<IActionResult> OnPostSendAllAsync(string template, Audience audience) =>
         SendAsync(() => mail.SendCampaignAsync(template, audience, mail.SiteUrl(Request)), $"E-mail \"{TemplateKeys.Label(template)}\"");

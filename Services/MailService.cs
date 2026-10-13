@@ -17,7 +17,8 @@ public enum Audience { All, NotDonated, Donated }
 /// <param name="Emails">The valid addresses in <paramref name="Email"/>, split out; what actually gets sent to.</param>
 /// <param name="Pending">Names of the children this donor asked for that await approval.</param>
 /// <param name="Approved">Names of the children whose request was approved.</param>
-public sealed record Donor(string Name, string Email, IReadOnlyList<string> Emails, string Origin, string LastEmail, IReadOnlyList<string> Pending, IReadOnlyList<string> Approved)
+/// <param name="RowNumber">The donor's row in the emails sheet, for deleting it.</param>
+public sealed record Donor(string Name, string Email, IReadOnlyList<string> Emails, string Origin, string LastEmail, IReadOnlyList<string> Pending, IReadOnlyList<string> Approved, int RowNumber)
 {
     public bool HasDonated => Pending.Count + Approved.Count > 0;
     public bool CanReceive => Emails.Count > 0;
@@ -25,7 +26,7 @@ public sealed record Donor(string Name, string Email, IReadOnlyList<string> Emai
     public string Situation => (Pending.Count, Approved.Count) switch
     {
         (0, 0) => "Ainda não doou",
-        (_, 0) => "Aguardando aprovação",
+        (_, 0) => "Aguardando confirmação",
         (0, _) => "Doação confirmada",
         _ => "Confirmada + aguardando",
     };
@@ -132,7 +133,8 @@ public sealed class MailService(SpreadsheetStore sheets, EmailSettingsStore sett
                 originCol >= 0 ? row.Values[originCol] : "",
                 lastCol >= 0 ? row.Values[lastCol] : "",
                 Names(ChildStatus.Pending),
-                Names(ChildStatus.Approved)));
+                Names(ChildStatus.Approved),
+                row.RowNumber));
         }
         return donors;
     }
