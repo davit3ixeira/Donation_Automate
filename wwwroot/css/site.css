@@ -751,7 +751,9 @@ dl.stats dd small { font-size: 0.8rem; color: var(--muted); font-family: var(--f
 .memories-carousel.is-playing .ring-progress { animation: ring-fill var(--autoplay) linear forwards; }
 .memories-carousel.is-held .ring-progress { animation-play-state: paused; }
 .memories-play .icon-play, .memories-carousel:not(.is-playing) .memories-play .icon-pause { display: none; }
-.memories-carousel:not(.is-playing) .memories-play .icon-play { display: block; margin-left: 2px; }
+/* grid, not block: an inline svg in a block sits on the text baseline and rides up. The play
+   triangle's path is already drawn a little right of centre, which is the optical centre. */
+.memories-carousel:not(.is-playing) .memories-play .icon-play { display: grid; }
 .memories-play > span { display: grid; place-items: center; }
 
 /* Timeline: the wire runs from the first bulb to the last and lights up to the year on show. */
