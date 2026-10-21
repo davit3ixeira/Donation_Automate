@@ -12,14 +12,24 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
     /// <summary>One child as shown on a card, already formatted for reading.</summary>
     public sealed record ChildCard(
         string Id, string Name, string FirstName, string Initials, string Gender, string Turma, string AgeGroup,
-        string Age, string Shoes, string Clothes, string Search, string Color);
+        string Age, string Shoes, string Clothes, string Search, string Color)
+    {
+        /// <summary>"3" → "3 anos", "1" → "1 ano"; falls back to the age group when the age is blank.</summary>
+        public string AgeLabel => Age switch
+        {
+            "" => AgeGroup,
+            "1" => "1 ano",
+            var a when a.All(char.IsDigit) => $"{a} anos",
+            var a => a,
+        };
+    }
 
     /// <summary>A photo of a past Christmas party, from wwwroot/img.</summary>
     public sealed record YearPhoto(int Year, string Src);
 
     public bool HasSpreadsheet { get; private set; }
     public IReadOnlyList<ChildCard> Children { get; private set; } = [];
-    public IReadOnlyList<(string Turma, int Count)> Turmas { get; private set; } = [];
+    public IReadOnlyList<(string Age, int Count)> Ages { get; private set; } = [];
     public int Boys => Children.Count(c => c.Gender == ChildGender.Male);
     public int Girls => Children.Count(c => c.Gender == ChildGender.Female);
     public CampaignStats Stats { get; private set; } = new(0, 0, 0, 0);
@@ -171,13 +181,17 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
             .Where(r => r.Key != "" && ChildStatus.Of(r.Values[ChildColumns.Status]) == ChildStatus.Available)
             .Select(ToCard)
             .ToList();
-        Turmas = Children
-            .Where(c => c.Turma != "")
-            .GroupBy(c => c.Turma)
+        // Youngest first; ages that don't start with a number go last.
+        Ages = Children
+            .Where(c => c.AgeLabel != "")
+            .GroupBy(c => c.AgeLabel)
+            .OrderBy(g => LeadingNumber.Match(g.Key) is { Success: true } m ? int.Parse(m.Value) : int.MaxValue)
+            .ThenBy(g => g.Key, StringComparer.Create(PtBr, true))
             .Select(g => (g.Key, g.Count()))
             .ToList();
     }
 
+    private static readonly Regex LeadingNumber = new(@"^\d+");
     private static readonly Regex YearInName = new(@"(?<!\d)(?:19|20)\d{2}(?!\d)");
     private static readonly HashSet<string> PhotoExtensions = new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp" };
 

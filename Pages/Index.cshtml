@@ -277,11 +277,11 @@
         </label>
         @{
             var byGender = Model.Boys > 0 && Model.Girls > 0;
-            var byTurma = Model.Turmas.Count > 1;
+            var byAge = Model.Ages.Count > 1;
         }
-        @if (byGender || byTurma)
+        @if (byGender || byAge)
         {
-            @* Gender and turma chips toggle on and off and combine; "Todos" clears both. *@
+            @* Gender and age chips toggle on and off and combine; "Todos" clears both. *@
             <div class="turma-chips" role="group" aria-label="Filtrar crianças">
                 <button type="button" class="turma-chip" data-all aria-pressed="true">Todos</button>
                 @if (byGender)
@@ -289,11 +289,11 @@
                     <button type="button" class="turma-chip" data-gender="@ChildGender.Male" aria-pressed="false">Meninos <span class="count">@Model.Boys</span></button>
                     <button type="button" class="turma-chip" data-gender="@ChildGender.Female" aria-pressed="false">Meninas <span class="count">@Model.Girls</span></button>
                 }
-                @if (byTurma)
+                @if (byAge)
                 {
-                    @foreach (var (turma, count) in Model.Turmas)
+                    @foreach (var (age, count) in Model.Ages)
                     {
-                        <button type="button" class="turma-chip" data-turma="@turma" aria-pressed="false">@turma <span class="count">@count</span></button>
+                        <button type="button" class="turma-chip" data-age="@age" aria-pressed="false">@age <span class="count">@count</span></button>
                     }
                 }
             </div>
@@ -326,7 +326,7 @@
                     var c = Model.Children[i];
                     var meta = string.Join(" · ", new[] { ChildGender.Label(c.Gender), c.Age != "" ? c.Age : c.AgeGroup, c.Turma }.Where(s => s != ""));
                     <label class="child-card" style="--i: @(i % 24)"
-                           data-turma="@c.Turma" data-gender="@c.Gender" data-search="@c.Search" data-first="@c.FirstName" data-name="@c.Name"
+                           data-age="@c.AgeLabel" data-gender="@c.Gender" data-search="@c.Search" data-first="@c.FirstName" data-name="@c.Name"
                            data-initials="@c.Initials" data-color="@c.Color">
                         <input type="checkbox" name="Selected" value="@c.Id" class="visually-hidden"
                                checked="@Model.Selected.Contains(c.Id)" aria-label="Escolher @c.Name">
@@ -394,14 +394,14 @@
         <fieldset class="donation-choice">
             <legend>Como você vai ajudar?</legend>
             <p class="donation-intro">
-                Cada criança ganha um <strong>kit</strong> com roupa, calçado e brinquedo. Valor médio:
-                <strong>R$ @SiteSettingsStore.Money(Model.SiteSettings.PixValue)</strong> por criança<span id="dialog-total"></span>.
+                Cada criança ganha um <strong>kit</strong> com roupa, calçado e brinquedo.
             </p>
             <label class="donation-option is-main">
                 <input type="radio" name="Donation" value="@ChildDonation.Kit" checked="@(Model.Donation != ChildDonation.Pix)">
                 <span>
                     <strong>@Icon("gift", 18) Vou comprar o kit <em class="tag">recomendado</em></strong>
-                    <small>Você escolhe e compra o presente e entrega até @MailService.Deadline(Model.SiteSettings). É a parte mais especial da campanha!</small>
+                    <small>Você escolhe e compra o presente e entrega até @MailService.Deadline(Model.SiteSettings)*. É a parte mais especial da campanha!</small>
+                    <small>* Local Botafogo, Rio de Janeiro</small>
                 </span>
             </label>
             <details class="pix-alt" open="@(Model.Donation == ChildDonation.Pix)">
@@ -410,7 +410,7 @@
                     <input type="radio" name="Donation" value="@ChildDonation.Pix" checked="@(Model.Donation == ChildDonation.Pix)">
                     <span>
                         <strong>Doar via Pix</strong>
-                        <small>A equipe compra o kit por você. Valor médio de R$ @SiteSettingsStore.Money(Model.SiteSettings.PixValue) por criança, até @MailService.Deadline(Model.SiteSettings).</small>
+                        <small>A equipe compra o kit por você. Valor médio para referência de R$ @SiteSettingsStore.Money(Model.SiteSettings.PixValue) por criança, até @MailService.Deadline(Model.SiteSettings).</small>
                     </span>
                 </label>
             </details>
@@ -469,7 +469,7 @@
             const bag = document.getElementById('bag');
             const search = document.getElementById('search');
             const fold = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-            let turma = '';
+            let age = '';
             let gender = '';
 
             // Average cost of a kit (and suggested Pix) per child, from the campaign settings.
@@ -505,7 +505,7 @@
                 let visible = 0;
                 for (const box of all) {
                     const card = cardOf(box);
-                    const show = (!turma || card.dataset.turma === turma) && (!gender || card.dataset.gender === gender)
+                    const show = (!age || card.dataset.age === age) && (!gender || card.dataset.gender === gender)
                         && (!q || card.dataset.search.includes(q));
                     card.hidden = !show;
                     if (show) visible++;
@@ -519,8 +519,8 @@
 
             function syncChips() {
                 document.querySelectorAll('.turma-chip[data-gender]').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.gender === gender)));
-                document.querySelectorAll('.turma-chip[data-turma]').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.turma === turma)));
-                document.querySelector('.turma-chip[data-all]')?.setAttribute('aria-pressed', String(!gender && !turma));
+                document.querySelectorAll('.turma-chip[data-age]').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.age === age)));
+                document.querySelector('.turma-chip[data-all]')?.setAttribute('aria-pressed', String(!gender && !age));
                 applyFilters();
             }
 
@@ -530,14 +530,14 @@
                 syncChips();
             }
 
-            function setTurma(value) {
-                turma = turma === value ? '' : value;
+            function setAge(value) {
+                age = age === value ? '' : value;
                 syncChips();
             }
 
             function clearChips() {
                 gender = '';
-                turma = '';
+                age = '';
                 syncChips();
             }
 
@@ -548,7 +548,7 @@
             });
 
             search?.addEventListener('input', applyFilters);
-            document.querySelectorAll('.turma-chip[data-turma]').forEach(chip => chip.addEventListener('click', () => setTurma(chip.dataset.turma)));
+            document.querySelectorAll('.turma-chip[data-age]').forEach(chip => chip.addEventListener('click', () => setAge(chip.dataset.age)));
             document.querySelectorAll('.turma-chip[data-gender]').forEach(chip => chip.addEventListener('click', () => setGender(chip.dataset.gender)));
             document.querySelector('.turma-chip[data-all]')?.addEventListener('click', clearChips);
             document.addEventListener('click', e => {
@@ -563,14 +563,7 @@
             });
 
             // The dialog lists who is in the bag, each with a button to take them out.
-            function showTotal() {
-                const n = chosen().length;
-                document.getElementById('dialog-total').textContent =
-                    n > 1 ? ` (${n} crianças ≈ ${money(n * kitValue)})` : '';
-            }
-
             function fillDialog() {
-                showTotal();
                 const list = document.getElementById('dialog-children');
                 list.replaceChildren(...chosen().map(box => {
                     const card = cardOf(box);
@@ -595,7 +588,6 @@
                         box.checked = false;
                         li.remove();
                         updateBag();
-                        showTotal();
                         if (!list.children.length) dialog.close();
                     });
                     li.append(avatar, info, remove);
