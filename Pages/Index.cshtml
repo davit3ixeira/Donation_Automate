@@ -281,7 +281,7 @@
         }
         @if (byGender || byGroup)
         {
-            @* Gender and group (age group + turma) chips toggle on and off and combine; "Todos" clears both. *@
+            @* Gender and turma chips (labelled with the turma's ages) toggle on and off and combine; "Todos" clears both. *@
             <div class="turma-chips" role="group" aria-label="Filtrar crianças">
                 <button type="button" class="turma-chip" data-all aria-pressed="true">Todos</button>
                 @if (byGender)
@@ -291,9 +291,9 @@
                 }
                 @if (byGroup)
                 {
-                    @foreach (var (group, count) in Model.Groups)
+                    @foreach (var group in Model.Groups)
                     {
-                        <button type="button" class="turma-chip" data-group="@group" aria-pressed="false">@group <span class="count">@count</span></button>
+                        <button type="button" class="turma-chip" data-group="@group.Key" aria-pressed="false">@group.Label <span class="count">@group.Count</span></button>
                     }
                 }
             </div>

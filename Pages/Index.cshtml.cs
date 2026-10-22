@@ -14,16 +14,19 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
         string Id, string Name, string FirstName, string Initials, string Gender, string Turma, string AgeGroup,
         string Age, string Shoes, string Clothes, string Search, string Color)
     {
-        /// <summary>The filter chip this child falls under: age group and turma together, e.g. "6 anos · Fundamental 1B".</summary>
-        public string Group => string.Join(" · ", new[] { AgeGroup, Turma }.Where(s => s != ""));
+        /// <summary>The filter chip this child falls under: the turma, or the age group when there's no turma.</summary>
+        public string Group => Turma != "" ? Turma : AgeGroup;
     }
+
+    /// <summary>A filter chip: one per turma, labelled with its ages, e.g. "Fundamental 1B · 6 a 8 anos".</summary>
+    public sealed record ChildGroup(string Key, string Label, int Count);
 
     /// <summary>A photo of a past Christmas party, from wwwroot/img.</summary>
     public sealed record YearPhoto(int Year, string Src);
 
     public bool HasSpreadsheet { get; private set; }
     public IReadOnlyList<ChildCard> Children { get; private set; } = [];
-    public IReadOnlyList<(string Group, int Count)> Groups { get; private set; } = [];
+    public IReadOnlyList<ChildGroup> Groups { get; private set; } = [];
     public int Boys => Children.Count(c => c.Gender == ChildGender.Male);
     public int Girls => Children.Count(c => c.Gender == ChildGender.Female);
     public CampaignStats Stats { get; private set; } = new(0, 0, 0, 0);
@@ -178,8 +181,32 @@ public class IndexModel(SpreadsheetStore store, SiteSettingsStore siteSettings, 
         Groups = Children
             .Where(c => c.Group != "")
             .GroupBy(c => c.Group)
-            .Select(g => (g.Key, g.Count()))
+            .Select(g => new ChildGroup(g.Key, GroupLabel(g.Key, g.ToList()), g.Count()))
             .ToList();
+    }
+
+    private static readonly Regex Number = new(@"\d+");
+
+    /// <summary>
+    /// "Fundamental 1B · 6 a 8 anos". When the turma mixes age groups (like the staff's children),
+    /// the ages run from the youngest to the oldest: "Filhos de funcionários · 2 a 10 anos".
+    /// </summary>
+    private static string GroupLabel(string key, IReadOnlyList<ChildCard> children)
+    {
+        if (children[0].Turma == "") return key;
+        var groups = children.Select(c => c.AgeGroup).Where(s => s != "").Distinct().ToList();
+        var ages = groups.Count > 1
+            ? groups.SelectMany(s => Number.Matches(s)).Select(m => int.Parse(m.Value)).ToList()
+            : [];
+        var range = groups.Count switch
+        {
+            0 => "",
+            1 => groups[0],
+            _ when ages.Count == 0 => string.Join(", ", groups),
+            _ when ages.Min() == ages.Max() => ages.Min() == 1 ? "1 ano" : $"{ages.Min()} anos",
+            _ => $"{ages.Min()} a {ages.Max()} anos",
+        };
+        return range == "" ? key : $"{key} · {range}";
     }
 
     private static readonly Regex YearInName = new(@"(?<!\d)(?:19|20)\d{2}(?!\d)");
