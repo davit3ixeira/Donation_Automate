@@ -277,11 +277,11 @@
         </label>
         @{
             var byGender = Model.Boys > 0 && Model.Girls > 0;
-            var byAge = Model.Ages.Count > 1;
+            var byGroup = Model.Groups.Count > 1;
         }
-        @if (byGender || byAge)
+        @if (byGender || byGroup)
         {
-            @* Gender and age chips toggle on and off and combine; "Todos" clears both. *@
+            @* Gender and group (age group + turma) chips toggle on and off and combine; "Todos" clears both. *@
             <div class="turma-chips" role="group" aria-label="Filtrar crianças">
                 <button type="button" class="turma-chip" data-all aria-pressed="true">Todos</button>
                 @if (byGender)
@@ -289,11 +289,11 @@
                     <button type="button" class="turma-chip" data-gender="@ChildGender.Male" aria-pressed="false">Meninos <span class="count">@Model.Boys</span></button>
                     <button type="button" class="turma-chip" data-gender="@ChildGender.Female" aria-pressed="false">Meninas <span class="count">@Model.Girls</span></button>
                 }
-                @if (byAge)
+                @if (byGroup)
                 {
-                    @foreach (var (age, count) in Model.Ages)
+                    @foreach (var (group, count) in Model.Groups)
                     {
-                        <button type="button" class="turma-chip" data-age="@age" aria-pressed="false">@age <span class="count">@count</span></button>
+                        <button type="button" class="turma-chip" data-group="@group" aria-pressed="false">@group <span class="count">@count</span></button>
                     }
                 }
             </div>
@@ -326,7 +326,7 @@
                     var c = Model.Children[i];
                     var meta = string.Join(" · ", new[] { ChildGender.Label(c.Gender), c.Age != "" ? c.Age : c.AgeGroup, c.Turma }.Where(s => s != ""));
                     <label class="child-card" style="--i: @(i % 24)"
-                           data-age="@c.AgeLabel" data-gender="@c.Gender" data-search="@c.Search" data-first="@c.FirstName" data-name="@c.Name"
+                           data-group="@c.Group" data-gender="@c.Gender" data-search="@c.Search" data-first="@c.FirstName" data-name="@c.Name"
                            data-initials="@c.Initials" data-color="@c.Color">
                         <input type="checkbox" name="Selected" value="@c.Id" class="visually-hidden"
                                checked="@Model.Selected.Contains(c.Id)" aria-label="Escolher @c.Name">
@@ -469,7 +469,7 @@
             const bag = document.getElementById('bag');
             const search = document.getElementById('search');
             const fold = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-            let age = '';
+            let group = '';
             let gender = '';
 
             // Average cost of a kit (and suggested Pix) per child, from the campaign settings.
@@ -505,7 +505,7 @@
                 let visible = 0;
                 for (const box of all) {
                     const card = cardOf(box);
-                    const show = (!age || card.dataset.age === age) && (!gender || card.dataset.gender === gender)
+                    const show = (!group || card.dataset.group === group) && (!gender || card.dataset.gender === gender)
                         && (!q || card.dataset.search.includes(q));
                     card.hidden = !show;
                     if (show) visible++;
@@ -519,8 +519,8 @@
 
             function syncChips() {
                 document.querySelectorAll('.turma-chip[data-gender]').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.gender === gender)));
-                document.querySelectorAll('.turma-chip[data-age]').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.age === age)));
-                document.querySelector('.turma-chip[data-all]')?.setAttribute('aria-pressed', String(!gender && !age));
+                document.querySelectorAll('.turma-chip[data-group]').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.group === group)));
+                document.querySelector('.turma-chip[data-all]')?.setAttribute('aria-pressed', String(!gender && !group));
                 applyFilters();
             }
 
@@ -530,14 +530,14 @@
                 syncChips();
             }
 
-            function setAge(value) {
-                age = age === value ? '' : value;
+            function setGroup(value) {
+                group = group === value ? '' : value;
                 syncChips();
             }
 
             function clearChips() {
                 gender = '';
-                age = '';
+                group = '';
                 syncChips();
             }
 
@@ -548,7 +548,7 @@
             });
 
             search?.addEventListener('input', applyFilters);
-            document.querySelectorAll('.turma-chip[data-age]').forEach(chip => chip.addEventListener('click', () => setAge(chip.dataset.age)));
+            document.querySelectorAll('.turma-chip[data-group]').forEach(chip => chip.addEventListener('click', () => setGroup(chip.dataset.group)));
             document.querySelectorAll('.turma-chip[data-gender]').forEach(chip => chip.addEventListener('click', () => setGender(chip.dataset.gender)));
             document.querySelector('.turma-chip[data-all]')?.addEventListener('click', clearChips);
             document.addEventListener('click', e => {
